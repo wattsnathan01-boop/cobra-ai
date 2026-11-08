@@ -23,6 +23,7 @@ FloatingWindow {
         { key: "voice", label: "Voice", icon: 0xF147D },         // waveform
         { key: "wake", label: "Wake word", icon: 0xF0003 },      // access-point
         { key: "personality", label: "Personality", icon: 0xF0004 },  // account
+        { key: "memory", label: "Memory", icon: 0xF0BA1 },           // head-lightbulb
         { key: "permissions", label: "Permissions", icon: 0xF0565 },  // shield-check
         { key: "shortcuts", label: "Shortcuts", icon: 0xF030C },      // keyboard
     ]
@@ -118,7 +119,8 @@ FloatingWindow {
             y: 44
             width: scroller.width - 88
             sourceComponent: ({ brains: brainsPage, voice: voicePage, wake: wakePage,
-                                personality: personalityPage, permissions: permissionsPage,
+                                personality: personalityPage, memory: memoryPage,
+                                permissions: permissionsPage,
                                 shortcuts: shortcutsPage })[win.cobra.settingsPage] || brainsPage
             onLoaded: scroller.contentY = 0
         }
@@ -128,6 +130,7 @@ FloatingWindow {
     Component { id: voicePage; VoicePage { cobra: win.cobra } }
     Component { id: wakePage; WakePage { cobra: win.cobra } }
     Component { id: personalityPage; PersonalityPage { cobra: win.cobra } }
+    Component { id: memoryPage; MemoryPage { cobra: win.cobra } }
     Component { id: permissionsPage; PermissionsPage { cobra: win.cobra } }
     Component { id: shortcutsPage; ShortcutsPage { cobra: win.cobra } }
 

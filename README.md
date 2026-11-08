@@ -94,6 +94,8 @@ on the CPU. Both run locally. Change them under `[ears]` and `[voice]` in `confi
 | `shell_run` | Run a command as you; you see the exact command | **ask** |
 | `sudo_run` | Run a command as root through `pkexec` (your password prompt) | **ask** |
 | `files_delete` | Move a file to the trash | **never** |
+| `screen_look` / `screen_watch` | Look at your screen with the local vision model | always |
+| `memory_save` / `memory_forget` | Remember or forget a fact about you | always |
 
 Change any of these in `~/.config/cobra/permissions.toml` (`always` / `ask` / `never`), along
 with the `[files] allowed` folders. Paths are resolved for real (symlinks, `..`) before they're
@@ -120,11 +122,20 @@ you say "stop watching" or click the pill.
   can see your screen" pill, and an eye badge in waybar.
 - **Pointing is roughly right**, good for "this line" or "that button", not tiny targets.
 
+## Memory
+
+"Cobra, remember that I take my coffee black" saves it to `~/.config/cobra/memory.md` (a plain
+list you can edit), and she knows it in every conversation from then on; "forget that…" removes
+it. Conversations are saved to `~/.local/share/cobra/cobra.db`, so after a restart she carries
+on where you left off (if it was within 6 hours; change it in Settings → Memory). Long
+conversations are summarised in the background so she keeps the gist. `cobractl reset` starts a
+fresh conversation.
+
 ## Settings
 
 `cobractl settings` (or the gear in the HUD) opens the settings window: **Brains** (local
 model, thinking on/off, VRAM), **Voice** (preview and switch voices), **Wake word** (on/off,
-sensitivity, how long she waits after just "Cobra"), **Personality** (edit her persona),
+sensitivity, how long she waits after just "Cobra"), **Personality** (edit her persona), **Memory** (what she remembers, conversation history),
 **Permissions** (always / ask / never per kind of action, allowed folders) and **Shortcuts**.
 Every change is saved to the files below and applies immediately.
 

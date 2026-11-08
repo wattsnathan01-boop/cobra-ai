@@ -119,6 +119,14 @@ def _voices(current: str) -> list[dict]:
     return out
 
 
+def _memory(server, cfg) -> dict:
+    mem = server.agent.memory
+    if mem is None:
+        return {"available": False, "facts": []}
+    return {"available": True, "facts": mem.facts(), "resume_hours": mem.resume_hours,
+            "file": str(mem.facts_path).replace(str(Path.home()), "~"), **mem.stats()}
+
+
 def _tools(server) -> list[dict]:
     gate = server.agent.gate
     return [{"name": t.name, "level": gate.level(t.name), "default": t.permission}
@@ -149,6 +157,7 @@ async def snapshot(server) -> dict:
                     "is_default": server.agent.persona.strip() == default_persona.strip(),
                     "customised": persona_file.exists()},
         "screen": {"hide": cfg["screen"]["hide"], "vision_model": cfg["local"]["vision_model"]},
+        "memory": _memory(server, cfg),
         "permissions": {"tools": _tools(server),
                         "allowed": load_allowed_folders(),
                         "exists": {a: Path(a).expanduser().is_dir()
@@ -245,6 +254,28 @@ async def apply(server, key: str, value) -> str:
         from . import screen
         screen.SETTINGS["hide"] = words
         return "private windows list saved"
+
+    if key.startswith("memory."):
+        mem = server.agent.memory
+        if mem is None:
+            raise SettingError("memory isn't set up")
+        if key == "memory.add":
+            return mem.remember(str(value))
+        if key == "memory.remove":
+            gone = mem.forget(str(value))
+            return "forgotten" if gone else "that wasn't remembered"
+        if key == "memory.clear_conversation":
+            server.agent.reset()
+            return "started a fresh conversation"
+        if key == "memory.clear_history":
+            mem.clear_history()
+            server.agent.history.clear()
+            return "all saved conversations deleted"
+        if key == "memory.resume_hours":
+            value = float(min(72, max(0, float(value))))
+            set_toml(user_cfg, "memory", "resume_hours", value)
+            mem.resume_hours = value
+            return f"carries on after a restart within {value:g} h" if value else "always starts fresh"
 
     if key == "files.allowed":
         folders = [str(f).strip() for f in value if str(f).strip()]

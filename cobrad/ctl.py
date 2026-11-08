@@ -237,7 +237,7 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("eye", help="waybar module: prints the screen indicator as JSON lines")
     st = sub.add_parser("settings", help="open the settings window")
     st.add_argument("page", nargs="?", choices=["brains", "voice", "wake", "personality",
-                                                "permissions", "shortcuts"])
+                                                "memory", "permissions", "shortcuts"])
     hud = sub.add_parser("hud", help="open or close the full HUD")
     hud.add_argument("action", nargs="?", default="toggle", choices=["toggle", "show", "hide"])
     sub.add_parser("watch", help="show what she hears and says, live")

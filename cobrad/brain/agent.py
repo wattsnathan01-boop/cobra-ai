@@ -1,36 +1,46 @@
 """The think → use tools → answer loop, with conversation history."""
 from __future__ import annotations
 
+import asyncio
+import logging
 import time
 from typing import Awaitable, Callable
 
 from .. import hands
 from ..gate import Confirm, Gate
+from .memory import SUMMARY_PROMPT, Memory, as_text
 from .ollama import BrainError
 
 Emit = Callable[[dict], Awaitable[None]]
+log = logging.getLogger(__name__)
 
 
 class Agent:
     def __init__(self, brain, gate: Gate, persona: str, max_steps: int = 8,
-                 history_turns: int = 12):
+                 history_turns: int = 12, memory: Memory | None = None):
         self.brain = brain
         self.gate = gate
         self.persona = persona
         self.max_steps = max_steps
         self.history_turns = history_turns
-        self.history: list[dict] = []
+        self.memory = memory
+        # pick up where we left off (if it wasn't long ago)
+        self.history: list[dict] = memory.recent(history_turns) if memory else []
+        self._summarising: asyncio.Task | None = None
         # extra lines for the system prompt that change with state (e.g. watching the screen)
         self.context: Callable[[], str] | None = None
 
     def reset(self) -> None:
         self.history.clear()
+        if self.memory:
+            self.memory.new_conversation()
 
     def _system(self) -> dict:
         now = time.strftime("%A %d %B %Y, %H:%M")
         extra = self.context() if self.context else ""
+        remembered = self.memory.prompt() if self.memory else ""
         return {"role": "system",
-                "content": f"{self.persona}\n\nCurrent local time: {now}.{extra}"}
+                "content": f"{self.persona}\n\nCurrent local time: {now}.{extra}{remembered}"}
 
     async def ask(self, text: str, emit: Emit, confirm: Confirm | None) -> str:
         turn = [{"role": "user", "content": text}]
@@ -88,10 +98,35 @@ class Agent:
             await emit({"type": "error", "message": "stopped after too many tool steps"})
 
         self.history.extend(turn)
-        self._trim()
+        if self.memory:
+            self.memory.record(turn)
+        dropped = self._trim()
+        if dropped and self.memory:
+            self._summarising = asyncio.create_task(self._summarise(dropped, self._summarising))
         return reply
 
-    def _trim(self) -> None:
+    def _trim(self) -> list[dict]:
+        """Keep the last history_turns exchanges; return what fell off the front."""
         users = [i for i, m in enumerate(self.history) if m["role"] == "user"]
-        if len(users) > self.history_turns:
-            self.history = self.history[users[-self.history_turns]:]
+        if len(users) <= self.history_turns:
+            return []
+        cut = users[-self.history_turns]
+        dropped, self.history = self.history[:cut], self.history[cut:]
+        return dropped
+
+    async def _summarise(self, dropped: list[dict], previous: asyncio.Task | None) -> None:
+        """Fold turns that no longer fit into the conversation's running summary."""
+        if previous and not previous.done():  # one at a time, in order
+            await asyncio.wait([previous])
+        prompt = SUMMARY_PROMPT.format(summary=self.memory.summary() or "(none yet)",
+                                       text=as_text(dropped))
+        text = ""
+        try:
+            async for ev in self.brain.chat([{"role": "user", "content": prompt}], []):
+                if ev["type"] == "text":
+                    text += ev["text"]
+        except Exception:
+            log.exception("summarising failed; keeping the old summary")
+            return
+        if text.strip():
+            self.memory.set_summary(text.strip()[:1200])

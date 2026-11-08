@@ -8,6 +8,7 @@ import sys
 
 from . import hands
 from .brain.agent import Agent
+from .brain.memory import Memory
 from .brain.ollama import OllamaBrain
 from .bus import Server
 from .config import (config_dir, data_dir, load_allowed_folders, load_config, load_permissions,
@@ -97,8 +98,12 @@ async def amain() -> None:
 
     gate = Gate(load_permissions(), state_dir() / "audit.jsonl", cfg["agent"]["confirm_timeout"],
                 user_file=config_dir() / "permissions.toml")
+    memory = Memory(data_dir() / "cobra.db", config_dir() / "memory.md",
+                    cfg["memory"]["resume_hours"])
     agent = Agent(brain, gate, load_persona(), cfg["agent"]["max_steps"],
-                  cfg["agent"]["history_turns"])
+                  cfg["agent"]["history_turns"], memory)
+    if agent.history:
+        log.info("carrying on the conversation (%d messages)", len(agent.history))
     server = Server(agent, socket_path(), info={
         "brain": "local", "model": local["model"], "voice": cfg["voice"]["piper_voice"],
         "stt": cfg["ears"]["whisper_model"]}, follow_up_seconds=cfg["wake"]["follow_up_seconds"])

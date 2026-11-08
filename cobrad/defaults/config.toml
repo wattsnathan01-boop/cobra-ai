@@ -51,6 +51,10 @@ hide = [
 # screenshots are scaled down to this many pixels on the long side for the vision model
 max_side = 1280
 
+[memory]
+# after a restart, carry on the last conversation if it was within this many hours
+resume_hours = 6
+
 [agent]
 max_steps = 8
 history_turns = 12
