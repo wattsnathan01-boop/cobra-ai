@@ -7,7 +7,8 @@ mode = "local"
 [local]
 host = "http://localhost:11434"
 model = "qwen3:8b"
-vision_model = "gemma3:4b"
+# reads your screen (milestone 6); only loaded while she's looking
+vision_model = "qwen3-vl:4b-instruct"
 # qwen3 can reason before answering; off keeps spoken replies fast
 think = false
 keep_alive = "10m"
@@ -39,6 +40,16 @@ enabled = true
 threshold = 0.5
 # after just "Cobra", how long she waits for the question
 follow_up_seconds = 8
+
+[screen]
+# windows whose class or title contains any of these are blacked out before Cobra looks
+hide = [
+    "bitwarden", "keepassxc", "1password", "proton pass", "seahorse",
+    "bank", "paypal", "monzo", "starling", "revolut", "barclays", "lloyds",
+    "natwest", "hsbc", "santander", "nationwide", "halifax", "credit card",
+]
+# screenshots are scaled down to this many pixels on the long side for the vision model
+max_side = 1280
 
 [agent]
 max_steps = 8

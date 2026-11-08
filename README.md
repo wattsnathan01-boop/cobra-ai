@@ -6,9 +6,9 @@ tools, and asks before doing anything risky.
 
 ![Full HUD](design/previews/1-full-hud.png)
 
-> **Status: milestone 5 of 7.** Voice (wake word or push-to-talk), the mini pop-up, the full
-> HUD, system tools, and files and shell commands behind confirm pop-ups all work. Screen
-> sharing is next. See [PLAN.md](PLAN.md).
+> **Status: milestone 6 of 7.** Voice (wake word or push-to-talk), the mini pop-up, the full
+> HUD, system tools, files and shell commands behind confirm pop-ups, settings, and screen
+> sharing all work. Memory and polish are next. See [PLAN.md](PLAN.md).
 
 ## Install (Arch)
 
@@ -104,6 +104,21 @@ even inside an allowed folder.
 offered for commands), **N** or Esc deny, or just say "yes" / "no". No answer in 20 seconds
 means no. Something set to **never** shows a "Blocked" card instead.
 Every tool call is logged to `~/.local/state/cobra/audit.jsonl`.
+
+## Screen
+
+"Cobra, what's this error?" or "what does the terminal on the left say?": she takes a
+screenshot of the monitor you're on (or just the focused window), and a local vision model
+(`qwen3-vl:4b-instruct`) answers. If the answer is about one spot, she highlights it with a
+note. "Watch my screen" keeps her looking whenever your question might be about it, until
+you say "stop watching" or click the pill.
+
+- **Nothing leaves the laptop.** Windows whose name or title contains a word on the hide list
+  (password managers, banks) are blacked out before the model sees the frame. Edit the list
+  under Settings → Permissions → Screen privacy.
+- **You always know.** While she can see a screen there's a crimson edge round it, a "Cobra
+  can see your screen" pill, and an eye badge in waybar.
+- **Pointing is roughly right**, good for "this line" or "that button", not tiny targets.
 
 ## Settings
 

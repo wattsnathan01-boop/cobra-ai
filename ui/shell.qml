@@ -9,4 +9,6 @@ ShellRoot {
     Hud { cobra: cobra }
     Confirm { cobra: cobra }
     Settings { cobra: cobra }
+    ScreenEdge { cobra: cobra }
+    Point { cobra: cobra }
 }

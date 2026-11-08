@@ -148,6 +148,7 @@ async def snapshot(server) -> dict:
         "persona": {"text": server.agent.persona,
                     "is_default": server.agent.persona.strip() == default_persona.strip(),
                     "customised": persona_file.exists()},
+        "screen": {"hide": cfg["screen"]["hide"], "vision_model": cfg["local"]["vision_model"]},
         "permissions": {"tools": _tools(server),
                         "allowed": load_allowed_folders(),
                         "exists": {a: Path(a).expanduser().is_dir()
@@ -237,6 +238,13 @@ async def apply(server, key: str, value) -> str:
         set_toml(config_dir() / "permissions.toml", "tools", tool, value)
         server.agent.gate.policy[tool] = value
         return f"{tool}: {value}"
+
+    if key == "screen.hide":
+        words = sorted({str(w).strip().lower() for w in value if str(w).strip()})
+        set_toml(user_cfg, "screen", "hide", words)
+        from . import screen
+        screen.SETTINGS["hide"] = words
+        return "private windows list saved"
 
     if key == "files.allowed":
         folders = [str(f).strip() for f in value if str(f).strip()]

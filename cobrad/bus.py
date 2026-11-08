@@ -12,6 +12,7 @@ Client → cobrad:
   {"type": "set", "key", "value"}          change one setting: saved and applied now
   {"type": "preview_voice", "voice"}       say a line in another voice without switching
   {"type": "open_settings", "page"?}       ask the overlay to open the settings window
+  {"type": "screen", "action"}             watching mode: watch | stop
   {"type": "confirm_reply", "confirm_id", "allow", "remember"?}   remember: "Always"
   {"type": "subscribe"}                    receive every event (overlay, waybar); answered
                                            with hello {model, voice, stt} and the state
@@ -27,6 +28,8 @@ cobrad → client:
   hud {action}  (subscribers only) · stats {cpu_percent, gpu, ..., playing}
   wake {on}  (to everyone, when it changes; also in hello)
   settings {...} · saved {key, note} · setting_error {key, message} · open_settings {page}
+  screen {state: off|looking|watching, monitor?, windows?}  (also in hello) ·
+  point {monitor, x, y, w, h, note}  (highlight a spot on screen, layout coordinates)
   level {source: mic|voice, value 0..1}  (subscribers only, ~30×/s)
   error {message} · done {text} · status {state}
 """
@@ -118,6 +121,7 @@ class Server:
         self.wake = None                 # ears.wake.WakeListener, if hands-free is set up
         self.follow_up_seconds = follow_up_seconds
         self.awake_until = 0.0           # after "Cobra" on its own: listening without the name
+        self.screen: dict = {"type": "screen", "state": "off"}
         self._bg: set[asyncio.Task] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -183,6 +187,13 @@ class Server:
                 self._spawn(self._set(msg.get("key", ""), msg.get("value"), writer))
             elif kind == "preview_voice":
                 self._spawn(self._preview_voice(msg.get("voice", ""), writer))
+            elif kind == "screen":
+                from . import screen
+                screen.watching = msg.get("action") == "watch"
+                await self.screen_event({"type": "screen",
+                                         "state": "watching" if screen.watching else "off"})
+                if writer not in self.subscribers:
+                    await self._send(writer, self.screen)
             elif kind == "open_settings":
                 await self._broadcast({"type": "open_settings", "page": msg.get("page", "")})
             elif kind == "wake":
@@ -202,6 +213,7 @@ class Server:
                 self.subscribers.add(writer)
                 await self._send(writer, {"type": "hello", **self.info,
                                           "wake": bool(self.wake and self.wake.running)})
+                await self._send(writer, self.screen)
                 await self._send(writer, {"type": "state", "state": self.state})
             elif kind == "status":
                 await self._send(writer, {"type": "status", "state": self.state})
@@ -381,6 +393,12 @@ class Server:
         self.spoken_task.add_done_callback(self._bg.discard)
 
     # ── hands-free ("Cobra, …") ─────────────────────────────────────────
+
+    async def screen_event(self, ev: dict) -> None:
+        """From the screen tools: indicators (edge, eye badge) and pointing."""
+        if ev["type"] == "screen":
+            self.screen = dict(ev)
+        await self._broadcast(ev)
 
     async def announce_hello(self) -> None:
         """Model or voice changed: tell the overlay."""

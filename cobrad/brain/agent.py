@@ -20,13 +20,17 @@ class Agent:
         self.max_steps = max_steps
         self.history_turns = history_turns
         self.history: list[dict] = []
+        # extra lines for the system prompt that change with state (e.g. watching the screen)
+        self.context: Callable[[], str] | None = None
 
     def reset(self) -> None:
         self.history.clear()
 
     def _system(self) -> dict:
         now = time.strftime("%A %d %B %Y, %H:%M")
-        return {"role": "system", "content": f"{self.persona}\n\nCurrent local time: {now}."}
+        extra = self.context() if self.context else ""
+        return {"role": "system",
+                "content": f"{self.persona}\n\nCurrent local time: {now}.{extra}"}
 
     async def ask(self, text: str, emit: Emit, confirm: Confirm | None) -> str:
         turn = [{"role": "user", "content": text}]

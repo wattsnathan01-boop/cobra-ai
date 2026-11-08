@@ -83,8 +83,11 @@ async def amain() -> None:
         log.warning("brain mode '%s' isn't built yet; using local", cfg["brain"]["mode"])
 
     hands.load_all()
+    from . import screen
     from .hands import files
     files.configure(load_allowed_folders())
+    screen.SETTINGS.update(host=cfg["local"]["host"], model=cfg["local"]["vision_model"],
+                           hide=cfg["screen"]["hide"], max_side=cfg["screen"]["max_side"])
     local = cfg["local"]
     brain = OllamaBrain(local["host"], local["model"], local["think"], local["keep_alive"])
     if await brain.ping():
@@ -100,6 +103,11 @@ async def amain() -> None:
         "brain": "local", "model": local["model"], "voice": cfg["voice"]["piper_voice"],
         "stt": cfg["ears"]["whisper_model"]}, follow_up_seconds=cfg["wake"]["follow_up_seconds"])
     server.voice = setup_voice(cfg, server)
+    screen.notify = server.screen_event
+    agent.context = lambda: (
+        "\nWatching mode is on: the person has asked you to keep an eye on their screen. "
+        "When a question could be about what they're looking at, use screen_look."
+        if screen.watching else "")
     await server.start()
     if server.voice:
         setup_wake(cfg, server)

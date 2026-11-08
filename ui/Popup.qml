@@ -13,10 +13,11 @@ PanelWindow {
 
     readonly property int glow: 18  // room around the card for its glow
     readonly property bool active: cobra.mode !== "idle"
-    readonly property bool shown: (active || linger.running) && !cobra.hudOpen
+    readonly property bool watching: cobra.screenState === "watching" && !active && !linger.running
+    readonly property bool shown: (active || linger.running || watching) && !cobra.hudOpen
     readonly property string mode: cobra.mode
-    readonly property color accent: cobra.error !== "" && !active ? theme.crimson
-                                                                  : theme.accent(mode)
+    readonly property color accent: watching || (cobra.error !== "" && !active) ? theme.crimson
+                                                                                : theme.accent(mode)
 
     anchors { top: true; right: true }
     margins { top: 10 - glow; right: 12 - glow }
@@ -44,6 +45,9 @@ PanelWindow {
                 : "Thinking · local · " + cobra.model
         if (mode === "speaking")
             return tail(cobra.reply.trim(), 72)
+        if (watching)
+            return "I can see your screen" + (cobra.screenWindows.length
+                                              ? " \u00b7 " + cobra.screenWindows.join(", ") : "")
         return cobra.error || cobra.reply.trim()
             || (cobra.wakeOn ? "Say \u201cCobra\u201d or hold SUPER+C" : "Hold SUPER+C to talk")
     }
@@ -53,6 +57,7 @@ PanelWindow {
         if (mode === "thinking") return cobra.tool !== "" ? "tool: " + cobra.tool
                                        : cobra.transcript !== "" ? "you: " + cobra.transcript : ""
         if (mode === "speaking") return "piper · " + cobra.voice.split("-")[0]
+        if (watching) return "WATCHING \u00b7 local vision \u00b7 nothing leaves this laptop"
         return !cobra.online ? "cobrad offline"
              : cobra.wakeOn ? "wake word armed" : "push-to-talk ready"
     }
@@ -61,6 +66,7 @@ PanelWindow {
         mode === "listening" ? 0xF036C      // microphone
       : mode === "thinking" ? 0xF0772       // loading
       : mode === "speaking" ? 0xF057E       // volume-high
+      : watching ? 0xF0209                  // eye-off: stop watching
       : 0xF0594)                            // weather-night
 
     // while she talks, show the end of what she's saying rather than the start
@@ -163,7 +169,8 @@ PanelWindow {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
-                    if (win.mode === "listening") win.cobra.cancelListening()
+                    if (win.watching) win.cobra.stopWatching()
+                    else if (win.mode === "listening") win.cobra.cancelListening()
                     else if (win.active) win.cobra.hush()
                     else linger.stop()
                 }

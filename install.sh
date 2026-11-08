@@ -9,6 +9,7 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 APP="$HOME/.local/share/cobra"
 CONF="$HOME/.config/cobra"
 MODEL="qwen3:8b"
+VISION="qwen3-vl:4b-instruct"
 
 say() { printf '\n\033[38;2;59;240;182m==>\033[0m %s\n' "$*"; }
 
@@ -33,6 +34,9 @@ done
 
 say "Downloading the local brain: $MODEL (~5 GB, one time)"
 ollama pull "$MODEL"
+
+say "Downloading the eyes: $VISION (~3.3 GB, one time; reads your screen, locally)"
+ollama pull "$VISION"
 
 say "Setting up Python environment"
 python -m venv "$APP/venv"
@@ -89,6 +93,15 @@ For push-to-talk (hold SUPER+C) and the full HUD (SUPER+SHIFT+C), add to the key
     hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen start"))
     hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen stop"), { release = true })
     hl.bind(mod .. " + SHIFT + C", hl.dsp.exec_cmd("~/.local/bin/cobractl hud"))
+
+For the eye badge (shown only while Cobra can see your screen), add "custom/cobra-eye" to
+waybar's modules-right and this module:
+
+    "custom/cobra-eye": {
+        "exec": "~/.local/bin/cobractl eye",
+        "return-type": "json",
+        "on-click": "~/.local/bin/cobractl screen stop"
+    }
 
 Then try:
     cobractl ask "how hot is my GPU?"

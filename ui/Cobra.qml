@@ -21,6 +21,10 @@ Item {
 
     property var card: null              // confirm waiting on you: the "confirm" event
     property var blocked: null           // a Never tool was tried: the "blocked" event
+    property string screenState: "off"   // off | looking | watching
+    property string screenMonitor: ""
+    property var screenWindows: []
+    property var point: null             // {monitor, x, y, w, h, note}: highlight a spot
     property bool hudOpen: false
     property bool settingsOpen: false
     property string settingsPage: "brains"
@@ -45,6 +49,7 @@ Item {
         sock.flush()
     }
     function hush() { send({ type: "hush" }) }
+    function stopWatching() { send({ type: "screen", action: "stop" }) }
     function openSettings(page) {
         if (page) settingsPage = page
         settingsOpen = true
@@ -135,6 +140,14 @@ Item {
             break
         case "open_settings":
             openSettings(ev.page)
+            break
+        case "screen":
+            screenState = ev.state
+            if (ev.monitor) screenMonitor = ev.monitor
+            if (ev.windows) screenWindows = ev.windows
+            break
+        case "point":
+            point = ev
             break
         case "stats":
             stats = ev

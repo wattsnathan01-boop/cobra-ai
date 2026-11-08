@@ -17,6 +17,8 @@ Column {
 
     // grouped like the design; changing a group sets every tool in it
     readonly property var groups: [
+        { icon: 0xF0208, title: "See your screen", sub: "Screenshots for the local vision model \u00b7 eye badge in waybar",
+          tools: ["screen_look", "screen_watch"] },
         { icon: 0xF0A10, title: "System info", sub: "Sensors, nvidia-smi, battery",
           tools: ["system_stats"] },
         { icon: 0xF05B6, title: "Windows & apps", sub: "Focus, move and open apps via hyprctl",
@@ -109,6 +111,83 @@ Column {
                         disabled: modelData.noAlways ? ["always"] : []
                         onPicked: lvl => modelData.tools.forEach(t => page.cobra.set("permission." + t, lvl))
                     }
+                }
+            }
+        }
+    }
+
+    Card {
+        width: parent.width
+        icon: 0xF0209  // eye-off
+        title: "Screen privacy"
+        tint: page.theme.crimson
+        readonly property var hide: page.cobra.settings ? page.cobra.settings.screen.hide : []
+
+        Text {
+            width: parent.width
+            text: "Windows whose name or title contains any of these are blacked out before Cobra "
+                  + "looks. Screenshots never leave this laptop."
+            color: page.theme.muted
+            wrapMode: Text.Wrap
+            font { family: page.theme.mono; pixelSize: 11 }
+        }
+        Flow {
+            width: parent.width
+            spacing: 8
+            Repeater {
+                model: parent.parent.hide
+                Rectangle {
+                    required property string modelData
+                    width: word.implicitWidth + 40
+                    height: 28
+                    radius: 14
+                    color: Qt.alpha(page.theme.crimson, 0.1)
+                    border.color: Qt.alpha(page.theme.crimson, 0.3)
+                    Text {
+                        id: word
+                        anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
+                        text: modelData
+                        color: page.theme.text
+                        font { family: page.theme.mono; pixelSize: 11 }
+                    }
+                    Text {
+                        anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
+                        text: "\u2715"
+                        color: page.theme.muted
+                        font { family: page.theme.mono; pixelSize: 10 }
+                        MouseArea {
+                            anchors { fill: parent; margins: -6 }
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: page.cobra.set("screen.hide",
+                                page.cobra.settings.screen.hide.filter(h => h !== modelData))
+                        }
+                    }
+                }
+            }
+        }
+        Rectangle {
+            width: parent.width
+            height: 40
+            radius: 8
+            color: Qt.rgba(0, 0, 0, 0.3)
+            border.color: hideInput.activeFocus ? Qt.alpha(page.theme.crimson, 0.5) : Qt.alpha(page.theme.text, 0.1)
+            TextInput {
+                id: hideInput
+                anchors { fill: parent; leftMargin: 14; rightMargin: 14 }
+                verticalAlignment: TextInput.AlignVCenter
+                color: page.theme.text
+                font { family: page.theme.mono; pixelSize: 12 }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: hideInput.text === ""
+                    text: "+  Hide windows containing\u2026 (e.g. a bank's name, Enter)"
+                    color: page.theme.crimson
+                    font: hideInput.font
+                }
+                Keys.onReturnPressed: {
+                    const w = text.trim().toLowerCase()
+                    if (w) page.cobra.set("screen.hide", page.cobra.settings.screen.hide.concat([w]))
+                    text = ""
                 }
             }
         }

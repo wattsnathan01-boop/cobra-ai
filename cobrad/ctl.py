@@ -136,6 +136,43 @@ async def _watch(reader, writer) -> None:
             mid_line = False
 
 
+def _eye_line(ev: dict) -> str:
+    state = ev.get("state", "off")
+    windows = ", ".join(ev.get("windows") or [])
+    if state == "off":
+        return json.dumps({"text": "", "class": "off"})
+    return json.dumps({
+        "text": "\U000f0208  COBRA",  # eye
+        "class": state,
+        "tooltip": ("Cobra is looking at your screen" if state == "looking"
+                    else "Cobra is watching your screen (click to stop)")
+                   + (f"\n{windows}" if windows else ""),
+    })
+
+
+async def eye() -> None:
+    """For a waybar custom module: one JSON line whenever the screen indicator changes.
+    Keeps going (and reconnects) if cobrad restarts."""
+    while True:
+        try:
+            reader, writer = await asyncio.open_unix_connection(str(socket_path()))
+        except (FileNotFoundError, ConnectionRefusedError):
+            print(_eye_line({}), flush=True)
+            await asyncio.sleep(3)
+            continue
+        await _send(writer, {"type": "subscribe"})
+        try:
+            async for line in reader:
+                ev = json.loads(line)
+                if ev.get("type") == "screen":
+                    print(_eye_line(ev), flush=True)
+        except (ConnectionError, json.JSONDecodeError):
+            pass
+        writer.close()
+        print(_eye_line({}), flush=True)
+        await asyncio.sleep(1)
+
+
 async def _simple(reader, writer, msg: dict) -> None:
     await _send(writer, msg)
     print(json.loads(await reader.readline()).get("state", "?"))
@@ -164,6 +201,9 @@ async def amain(args: argparse.Namespace) -> None:
             await _send(writer, {"type": "wake", "action": args.action})
             ev = json.loads(await reader.readline())
             print("on" if ev.get("on") else ev.get("message", "off"))
+        elif args.cmd == "screen":
+            await _send(writer, {"type": "screen", "action": args.action})
+            print(json.loads(await reader.readline()).get("state", "?"))
         elif args.cmd == "settings":
             await _send(writer, {"type": "open_settings", "page": args.page or ""})
         elif args.cmd == "hud":
@@ -192,6 +232,9 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("hush", help="stop talking")
     wake = sub.add_parser("wake", help='turn the "Cobra" wake word on or off')
     wake.add_argument("action", nargs="?", default="toggle", choices=["toggle", "on", "off"])
+    sc = sub.add_parser("screen", help="watching mode: Cobra keeps an eye on your screen")
+    sc.add_argument("action", choices=["watch", "stop"])
+    sub.add_parser("eye", help="waybar module: prints the screen indicator as JSON lines")
     st = sub.add_parser("settings", help="open the settings window")
     st.add_argument("page", nargs="?", choices=["brains", "voice", "wake", "personality",
                                                 "permissions", "shortcuts"])
@@ -200,8 +243,9 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("watch", help="show what she hears and says, live")
     sub.add_parser("status", help="idle / listening / thinking / speaking")
     sub.add_parser("reset", help="forget the conversation so far")
+    args = p.parse_args(argv)
     try:
-        asyncio.run(amain(p.parse_args(argv)))
+        asyncio.run(eye() if args.cmd == "eye" else amain(args))
     except KeyboardInterrupt:
         print()
 
