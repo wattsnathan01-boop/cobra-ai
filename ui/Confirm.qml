@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Hyprland
-import Quickshell.Io
 import Quickshell.Wayland
 
 PanelWindow {
@@ -50,10 +49,6 @@ PanelWindow {
         onTriggered: win.cobra.blocked = null
     }
 
-    Process {
-        id: openPermissions
-        command: ["xdg-open", Quickshell.env("HOME") + "/.config/cobra/permissions.toml"]
-    }
 
     function allow(remember) { cobra.answer(true, remember) }
     function deny() { cobra.answer(false, false) }
@@ -353,7 +348,7 @@ PanelWindow {
                     key: "↗"
                     tint: win.theme.crimson
                     filled: true
-                    onClicked: { openPermissions.running = true; win.dismiss() }
+                    onClicked: { win.cobra.openSettings("permissions"); win.dismiss() }
                 }
                 Button {
                     id: ok

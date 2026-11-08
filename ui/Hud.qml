@@ -250,7 +250,7 @@ PanelWindow {
                 tint: hud.mode === "speaking" ? hud.theme.crimson : hud.theme.text
                 onClicked: hud.cobra.hush()
             }
-            IconButton { icon: 0xF0493; enabled: false }  // settings arrive in milestone 7
+            IconButton { icon: 0xF0493; onClicked: hud.cobra.openSettings("") }  // cog
             IconButton { icon: 0xF0156; onClicked: hud.cobra.hudOpen = false }
         }
 

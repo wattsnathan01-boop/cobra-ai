@@ -79,6 +79,10 @@ and these with the other layer rules, to blur behind the pop-up and the HUD:
     hl.layer_rule({ name = "blur-cobra", match = { namespace = "cobra" }, blur = true, ignore_alpha = 0.2 })
     hl.layer_rule({ name = "blur-cobra-hud", match = { namespace = "cobra-hud" }, blur = true })
 
+and this with the window rules, so the settings window floats:
+
+    hl.window_rule({ name = "cobra-settings", match = { title = "^(Cobra settings)$" }, float = true, size = "1400 880", center = true })
+
 For push-to-talk (hold SUPER+C) and the full HUD (SUPER+SHIFT+C), add to the keybinds in
 ~/.config/hypr/hyprland.lua:
 
@@ -91,6 +95,7 @@ Then try:
     cobractl ask --say "say hello"
     cobractl chat
     cobractl watch     (shows what she hears and says while you use SUPER+C)
+    cobractl settings  (brains, voice, wake word, personality, permissions)
 
 Logs:         journalctl --user -u cobra -f
 Audit trail:  ~/.local/state/cobra/audit.jsonl

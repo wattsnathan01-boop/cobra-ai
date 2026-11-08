@@ -22,6 +22,12 @@ Item {
     property var card: null              // confirm waiting on you: the "confirm" event
     property var blocked: null           // a Never tool was tried: the "blocked" event
     property bool hudOpen: false
+    property bool settingsOpen: false
+    property string settingsPage: "brains"
+    property var settings: null          // snapshot from the daemon
+    property string settingsNote: ""     // "voice changed to …" / an error
+    property bool settingsError: false
+    property string busyKey: ""          // a setting being saved (or a voice previewing)
     property bool wakeOn: false          // listening for "Cobra"
     property var stats: ({})            // system_stats + playing, polled while the HUD is open
     // recent tool calls, newest first: {name, detail, status: running|done|failed, ms}
@@ -39,6 +45,20 @@ Item {
         sock.flush()
     }
     function hush() { send({ type: "hush" }) }
+    function openSettings(page) {
+        if (page) settingsPage = page
+        settingsOpen = true
+        hudOpen = false
+        send({ type: "settings" })
+    }
+    function set(key, value) {
+        busyKey = key
+        send({ type: "set", key: key, value: value })
+    }
+    function previewVoice(name) {
+        busyKey = "preview:" + name
+        send({ type: "preview_voice", voice: name })
+    }
     function answer(allow, remember) {
         if (!card) return
         send({ type: "confirm_reply", confirm_id: card.confirm_id, allow: allow,
@@ -100,6 +120,21 @@ Item {
             break
         case "wake":
             wakeOn = !!ev.on
+            break
+        case "settings":
+            settings = ev
+            break
+        case "saved":
+            busyKey = ""
+            if (ev.note) { settingsNote = ev.note; settingsError = false }
+            break
+        case "setting_error":
+            busyKey = ""
+            settingsNote = ev.message
+            settingsError = true
+            break
+        case "open_settings":
+            openSettings(ev.page)
             break
         case "stats":
             stats = ev

@@ -105,6 +105,14 @@ offered for commands), **N** or Esc deny, or just say "yes" / "no". No answer in
 means no. Something set to **never** shows a "Blocked" card instead.
 Every tool call is logged to `~/.local/state/cobra/audit.jsonl`.
 
+## Settings
+
+`cobractl settings` (or the gear in the HUD) opens the settings window: **Brains** (local
+model, thinking on/off, VRAM), **Voice** (preview and switch voices), **Wake word** (on/off,
+sensitivity, how long she waits after just "Cobra"), **Personality** (edit her persona),
+**Permissions** (always / ask / never per kind of action, allowed folders) and **Shortcuts**.
+Every change is saved to the files below and applies immediately.
+
 ## Config
 
 | File | What |

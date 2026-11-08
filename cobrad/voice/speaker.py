@@ -71,8 +71,7 @@ class Speaker:
             self._audio.put((gen, None))  # end of this sentence, always sent exactly once
 
     def _play_loop(self) -> None:
-        stream = None
-        block = max(1, self.tts.sample_rate // LEVELS_PER_SECOND)
+        stream, rate = None, 0
         while True:
             try:
                 gen, chunk = self._audio.get(timeout=0.5)
@@ -90,9 +89,13 @@ class Speaker:
             if gen != self._gen:
                 continue
             try:
+                if stream is not None and rate != self.tts.sample_rate:
+                    stream = _close(stream)  # the voice was changed to one with another rate
                 if stream is None:
-                    stream = self._output(self.tts.sample_rate)
+                    rate = self.tts.sample_rate
+                    stream = self._output(rate)
                     stream.start()
+                block = max(1, rate // LEVELS_PER_SECOND)
                 for i in range(0, len(chunk), block):
                     if gen != self._gen:  # barge-in: drop what's buffered and stop
                         stream = _close(stream, abort=True)

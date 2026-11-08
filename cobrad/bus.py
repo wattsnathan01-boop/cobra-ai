@@ -8,6 +8,10 @@ Client → cobrad:
   {"type": "hud", "action"}                open the full HUD: toggle | show | hide
   {"type": "wake", "action"}               the "Cobra" wake word: on | off | toggle
   {"type": "stats"}                        system stats + what's playing, for the HUD
+  {"type": "settings"}                     every setting (answered with a settings snapshot)
+  {"type": "set", "key", "value"}          change one setting: saved and applied now
+  {"type": "preview_voice", "voice"}       say a line in another voice without switching
+  {"type": "open_settings", "page"?}       ask the overlay to open the settings window
   {"type": "confirm_reply", "confirm_id", "allow", "remember"?}   remember: "Always"
   {"type": "subscribe"}                    receive every event (overlay, waybar); answered
                                            with hello {model, voice, stt} and the state
@@ -22,6 +26,7 @@ cobrad → client:
   blocked {tool, args, preview?}  (a tool set to Never was tried)
   hud {action}  (subscribers only) · stats {cpu_percent, gpu, ..., playing}
   wake {on}  (to everyone, when it changes; also in hello)
+  settings {...} · saved {key, note} · setting_error {key, message} · open_settings {page}
   level {source: mic|voice, value 0..1}  (subscribers only, ~30×/s)
   error {message} · done {text} · status {state}
 """
@@ -37,6 +42,7 @@ import time
 import uuid
 from pathlib import Path
 
+from . import settings
 from .brain.agent import Agent
 from .gate import NO_ALWAYS
 from .voice import Voice
@@ -171,8 +177,16 @@ class Server:
                 await self._hush()
             elif kind == "hud":
                 await self._broadcast({"type": "hud", "action": msg.get("action", "toggle")})
+            elif kind == "settings":
+                await self._send(writer, await settings.snapshot(self))
+            elif kind == "set":
+                self._spawn(self._set(msg.get("key", ""), msg.get("value"), writer))
+            elif kind == "preview_voice":
+                self._spawn(self._preview_voice(msg.get("voice", ""), writer))
+            elif kind == "open_settings":
+                await self._broadcast({"type": "open_settings", "page": msg.get("page", "")})
             elif kind == "wake":
-                await self._set_wake(msg.get("action", "toggle"))
+                await self.set_wake(msg.get("action", "toggle"))
                 if writer not in self.subscribers:
                     await self._send(writer, {"type": "wake",
                                               "on": bool(self.wake and self.wake.running)})
@@ -368,7 +382,34 @@ class Server:
 
     # ── hands-free ("Cobra, …") ─────────────────────────────────────────
 
-    async def _set_wake(self, action: str) -> None:
+    async def announce_hello(self) -> None:
+        """Model or voice changed: tell the overlay."""
+        await self._broadcast({"type": "hello", **self.info,
+                               "wake": bool(self.wake and self.wake.running)})
+
+    async def _set(self, key: str, value, writer: asyncio.StreamWriter) -> None:
+        try:
+            note = await settings.apply(self, key, value)
+        except (settings.SettingError, ValueError, TypeError, OSError) as e:
+            await self._send(writer, {"type": "setting_error", "key": key, "message": str(e)})
+            return
+        except Exception as e:
+            log.exception("setting %s failed", key)
+            await self._send(writer, {"type": "setting_error", "key": key, "message": str(e)})
+            return
+        log.info("setting %s: %s", key, note)
+        await self._send(writer, {"type": "saved", "key": key, "note": note})
+        await self._send(writer, await settings.snapshot(self))
+
+    async def _preview_voice(self, voice: str, writer: asyncio.StreamWriter) -> None:
+        try:
+            await settings.preview_voice(voice)
+            await self._send(writer, {"type": "saved", "key": "preview_voice", "note": ""})
+        except Exception as e:
+            await self._send(writer, {"type": "setting_error", "key": "preview_voice",
+                                      "message": str(e)})
+
+    async def set_wake(self, action: str) -> None:
         if self.wake is None:
             await self._broadcast({"type": "error", "message": "the wake word isn't set up"})
             return

@@ -164,6 +164,8 @@ async def amain(args: argparse.Namespace) -> None:
             await _send(writer, {"type": "wake", "action": args.action})
             ev = json.loads(await reader.readline())
             print("on" if ev.get("on") else ev.get("message", "off"))
+        elif args.cmd == "settings":
+            await _send(writer, {"type": "open_settings", "page": args.page or ""})
         elif args.cmd == "hud":
             await _send(writer, {"type": "hud", "action": args.action})
         elif args.cmd == "hush":
@@ -190,6 +192,9 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("hush", help="stop talking")
     wake = sub.add_parser("wake", help='turn the "Cobra" wake word on or off')
     wake.add_argument("action", nargs="?", default="toggle", choices=["toggle", "on", "off"])
+    st = sub.add_parser("settings", help="open the settings window")
+    st.add_argument("page", nargs="?", choices=["brains", "voice", "wake", "personality",
+                                                "permissions", "shortcuts"])
     hud = sub.add_parser("hud", help="open or close the full HUD")
     hud.add_argument("action", nargs="?", default="toggle", choices=["toggle", "show", "hide"])
     sub.add_parser("watch", help="show what she hears and says, live")
