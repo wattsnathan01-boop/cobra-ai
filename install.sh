@@ -59,10 +59,11 @@ fi
 
 say "Done!"
 cat <<'EOF'
-Add this to ~/.config/hypr/hyprland.conf so Cobra starts with Hyprland
-(already in the cobra-queen-dots repo if you pull the latest):
+Cobra starts with Hyprland once your dotfiles have this inside the
+hl.on("hyprland.start", ...) block of ~/.config/hypr/hyprland.lua
+(already there if you `git pull` cobra-queen-dots):
 
-    exec-once = systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && systemctl --user start cobra
+    hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && systemctl --user start cobra")
 
 Then try:
     cobractl ask "how hot is my GPU?"
