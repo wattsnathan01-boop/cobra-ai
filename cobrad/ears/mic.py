@@ -54,6 +54,11 @@ class Recorder:
             self._chunks, self._frames = [], 0
         return audio
 
+    def snapshot(self) -> np.ndarray:
+        """What has been heard so far, without stopping (for the live transcript)."""
+        with self._lock:
+            return np.concatenate(self._chunks) if self._chunks else np.zeros(0, np.float32)
+
     def _callback(self, indata, frames, time, status) -> None:
         mono = np.asarray(indata, dtype=np.float32).reshape(len(indata), -1)[:, 0]
         with self._lock:

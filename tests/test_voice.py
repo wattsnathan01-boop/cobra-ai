@@ -151,6 +151,9 @@ class FakeRecorder:
         self.recording = False
         return np.zeros(16000, np.float32)
 
+    def snapshot(self):
+        return np.zeros(16000, np.float32)
+
 
 class FakeTranscriber:
     def __init__(self, *texts):
@@ -284,6 +287,30 @@ class VoiceBusTests(unittest.TestCase):
             return recording
 
         self.assertFalse(run(go()))
+
+    def test_subscriber_gets_hello_and_live_transcript(self):
+        async def go():
+            agent, _ = make_agent([("Hi.", None)])
+            server, voice, sock = await self._server(agent, FakeTranscriber(
+                *(["set a timer"] * 50)))
+            server.info = {"model": "qwen3:8b"}
+            reader, writer = await asyncio.open_unix_connection(str(sock))
+            writer.write(b'{"type": "subscribe"}\n')
+            await writer.drain()
+            await self._send(sock, {"type": "listen", "action": "start"})
+            events = []
+            while not any(e["type"] == "partial" for e in events):
+                events.append(json.loads(await asyncio.wait_for(reader.readline(), 3)))
+            await self._send(sock, {"type": "listen", "action": "cancel"})
+            # closing must not wait for subscribers (the overlay) to hang up
+            await asyncio.wait_for(server.close(), 2)
+            writer.close()
+            return events
+
+        events = run(go())
+        self.assertEqual(events[0], {"type": "hello", "model": "qwen3:8b"})
+        self.assertIn({"type": "state", "state": "listening"}, events)
+        self.assertEqual(events[-1], {"type": "partial", "text": "set a timer"})
 
     def test_confirm_is_answered_by_voice(self):
         async def go():

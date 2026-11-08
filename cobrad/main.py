@@ -78,7 +78,9 @@ async def amain() -> None:
     gate = Gate(load_permissions(), state_dir() / "audit.jsonl", cfg["agent"]["confirm_timeout"])
     agent = Agent(brain, gate, load_persona(), cfg["agent"]["max_steps"],
                   cfg["agent"]["history_turns"])
-    server = Server(agent, socket_path())
+    server = Server(agent, socket_path(), info={
+        "brain": "local", "model": local["model"], "voice": cfg["voice"]["piper_voice"],
+        "stt": cfg["ears"]["whisper_model"]})
     server.voice = setup_voice(cfg, server)
     await server.start()
     ears = asyncio.create_task(load_ears(cfg, server.voice)) if server.voice else None

@@ -54,7 +54,10 @@ async def _ask(reader, writer, text: str, speak: bool = False) -> None:
             print(f"\n{CRIMSON}  ! {ev['message']}{RESET}")
         elif kind == "done":
             print()
-            return
+            if not speak:
+                return
+        elif kind == "state" and ev["state"] == "idle" and speak:
+            return  # stay connected until she's finished talking, or she'd be cut short
 
 
 async def _confirm(ev: dict, mid_line: bool) -> bool:

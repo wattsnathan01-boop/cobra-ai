@@ -6,11 +6,13 @@ Client → cobrad:
   {"type": "listen", "action"}             push-to-talk: start | stop | toggle | cancel
   {"type": "hush"}                         stop talking (and stop the spoken question)
   {"type": "confirm_reply", "confirm_id", "allow"}
-  {"type": "subscribe"}                    receive every event (overlay, waybar)
+  {"type": "subscribe"}                    receive every event (overlay, waybar); answered
+                                           with hello {model, voice, stt} and the state
   {"type": "status"} / {"type": "reset"}
 
 cobrad → client:
   state {state: idle|listening|thinking|speaking} · heard {text} · delta {text}
+  partial {text}  (live transcript while listening; subscribers only)
   tool {name, args, status, result?} · confirm {confirm_id, tool, args}
   level {source: mic|voice, value 0..1}  (subscribers only, ~30×/s)
   error {message} · done {text} · status {state}
@@ -36,6 +38,10 @@ log = logging.getLogger(__name__)
 MIN_SPEECH_SECONDS = 0.3
 # a "stop" this soon before a "start" was a quick tap whose messages arrived out of order
 TAP_SECONDS = 0.5
+# Whisper turns mic hum into "." or "..."; only text with letters or digits counts as speech
+_WORDS = re.compile(r"\w")
+# how often the live transcript is refreshed while you talk
+PARTIAL_SECONDS = 0.7
 
 _YES = re.compile(r"\b(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|allow|affirmative)\b")
 _NO = re.compile(r"\b(no|nope|nah|don't|do not|stop|cancel|deny)\b")
@@ -48,12 +54,15 @@ def parse_yes_no(text: str) -> bool:
 
 
 class Server:
-    def __init__(self, agent: Agent, path: Path, voice: Voice | None = None):
+    def __init__(self, agent: Agent, path: Path, voice: Voice | None = None,
+                 info: dict | None = None):
         self.agent = agent
         self.path = path
         self.voice = voice
+        self.info = info or {}  # model / voice names, sent to subscribers in "hello"
         self.state = "idle"
         self.subscribers: set[asyncio.StreamWriter] = set()
+        self.clients: set[asyncio.StreamWriter] = set()
         self.pending: dict[str, asyncio.Future] = {}
         self.lock = asyncio.Lock()
         self.server: asyncio.AbstractServer | None = None
@@ -78,16 +87,21 @@ class Server:
             self.voice.speaker.stop()
         if self.server:
             self.server.close()
+            # wait_closed() waits for every client, and the overlay never hangs up by itself
+            for writer in list(self.clients):
+                writer.close()
             await self.server.wait_closed()
         self.path.unlink(missing_ok=True)
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         tasks: set[asyncio.Task] = set()
+        self.clients.add(writer)
         try:
             await self._serve(reader, writer, tasks)
         except ConnectionError:
             pass  # the client went away mid-read
         finally:
+            self.clients.discard(writer)
             self.subscribers.discard(writer)
             for task in tasks:
                 task.cancel()
@@ -116,6 +130,7 @@ class Server:
                     fut.set_result(bool(msg.get("allow")))
             elif kind == "subscribe":
                 self.subscribers.add(writer)
+                await self._send(writer, {"type": "hello", **self.info})
                 await self._send(writer, {"type": "state", "state": self.state})
             elif kind == "status":
                 await self._send(writer, {"type": "status", "state": self.state})
@@ -217,6 +232,7 @@ class Server:
         await self._set_state("listening")
         self._listen_session += 1
         self._spawn(self._listen_timeout(self._listen_session))
+        self._spawn(self._live_transcript(self._listen_session))
 
     async def _listen_timeout(self, session: int) -> None:
         """Never leave the mic open: stop at the recording limit even if the key-up never came."""
@@ -224,6 +240,28 @@ class Server:
         if session == self._listen_session and self.voice.recorder.recording:
             log.info("push-to-talk held too long (or key-up lost); stopping")
             await self._listen_stop()
+
+    async def _live_transcript(self, session: int) -> None:
+        """While the key is held, keep transcribing what's been said so far for the overlay."""
+        recorder, last = self.voice.recorder, ""
+        while True:
+            await asyncio.sleep(PARTIAL_SECONDS)
+            if session != self._listen_session or not recorder.recording:
+                return
+            if not self.subscribers or self.voice.transcriber is None:
+                continue
+            audio = recorder.snapshot()
+            if len(audio) < MIN_SPEECH_SECONDS * 16000:
+                continue
+            try:
+                text = await asyncio.to_thread(self.voice.transcriber.transcribe, audio)
+            except Exception:
+                log.exception("live transcript failed")
+                return
+            if (_WORDS.search(text) and text != last and session == self._listen_session
+                    and recorder.recording):
+                last = text
+                await self._broadcast({"type": "partial", "text": text})
 
     async def _listen_stop(self) -> None:
         recorder = self.voice.recorder
@@ -245,7 +283,7 @@ class Server:
             await self._say_error(f"I couldn't make that out: {e}")
             return
         log.info("heard: %r", text)
-        if not text:
+        if not _WORDS.search(text):
             await self._set_state(self._resting_state())
             return
         if self.pending:  # she asked "yes or no?": this is the answer

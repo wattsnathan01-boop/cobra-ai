@@ -6,8 +6,8 @@ tools, and asks before doing anything risky.
 
 ![Full HUD](design/previews/1-full-hud.png)
 
-> **Status: milestone 2 of 7.** Text chat, system tools and push-to-talk voice work.
-> The overlay and screen sharing are next. See [PLAN.md](PLAN.md).
+> **Status: milestone 3 of 7.** Text chat, system tools, push-to-talk voice and the mini
+> pop-up work. The full HUD and screen sharing are next. See [PLAN.md](PLAN.md).
 
 ## Install (Arch)
 
@@ -18,7 +18,8 @@ bash install.sh
 ```
 
 It installs Ollama (CUDA build), downloads `qwen3:8b` (~5 GB), the Whisper speech model
-(~1.6 GB) and a Piper voice, sets up the `cobrad` service and puts `cobractl` on your path.
+(~1.6 GB) and a Piper voice, sets up the `cobrad` service, links the Quickshell overlay to `~/.config/quickshell/cobra` and puts
+`cobractl` on your path.
 
 ## Use
 
@@ -47,6 +48,16 @@ cobractl watch            # see what she hears and says, live
 cobractl ask --say "hi"   # typed question, spoken answer
 cobractl hush             # stop talking
 ```
+
+### Mini pop-up
+
+![Mini pop-up states](design/previews/2-mini-popup-states.png)
+
+A Quickshell overlay in the top-right corner shows what she's doing: your words as you speak
+(live transcript), the brain and tool while she thinks, and her words with voice bars while she
+talks. It fades out a few seconds after she finishes. The button on the right cancels listening
+or stops her talking. Start it with `qs -n -c cobra` (install.sh prints the Hyprland autostart
+line and a blur rule).
 
 Speech-to-text is Whisper `large-v3-turbo` on the GPU; speech is Piper (`en_GB-cori-high`),
 on the CPU. Both run locally. Change them under `[ears]` and `[voice]` in `config.toml`.

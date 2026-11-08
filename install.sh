@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ── Cobra · installer (Arch Linux) ───────────────
-# Milestones 0–2: local brain (Ollama on the RTX 5060), voice (Whisper + Piper),
-# cobrad daemon, cobractl CLI.
+# Milestones 0–3: local brain (Ollama on the RTX 5060), voice (Whisper + Piper),
+# cobrad daemon, cobractl CLI, Quickshell overlay.
 # Run as your normal user from the repo folder:  bash install.sh
 set -euo pipefail
 
@@ -22,7 +22,7 @@ find "$DIR" -path "$DIR/.git" -prune -o -type f \
     -exec sed -i 's/\r$//' {} +
 
 say "Installing packages"
-sudo pacman -S --needed python ollama-cuda gtk3 playerctl brightnessctl wireplumber portaudio
+sudo pacman -S --needed python ollama-cuda gtk3 playerctl brightnessctl wireplumber portaudio quickshell
 
 say "Starting Ollama (runs on the RTX 5060)"
 sudo systemctl enable --now ollama
@@ -50,6 +50,10 @@ for f in config.toml permissions.toml persona.md; do
     [ -e "$CONF/$f" ] || cp "$DIR/cobrad/defaults/$f" "$CONF/$f"
 done
 
+say "Overlay (Quickshell)"
+mkdir -p "$HOME/.config/quickshell"
+ln -sfn "$DIR/ui" "$HOME/.config/quickshell/cobra"
+
 say "Installing the service"
 mkdir -p "$HOME/.config/systemd/user"
 cp "$DIR/systemd/cobra.service" "$HOME/.config/systemd/user/cobra.service"
@@ -68,6 +72,11 @@ hl.on("hyprland.start", ...) block of ~/.config/hypr/hyprland.lua
 (already there if you `git pull` cobra-queen-dots):
 
     hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && systemctl --user start cobra")
+    hl.exec_cmd("qs -n -c cobra")
+
+and this with the other layer rules, to blur behind the pop-up:
+
+    hl.layer_rule({ name = "blur-cobra", match = { namespace = "cobra" }, blur = true, ignore_alpha = 0.2 })
 
 For push-to-talk (hold SUPER+C), add to the keybinds in ~/.config/hypr/hyprland.lua:
 

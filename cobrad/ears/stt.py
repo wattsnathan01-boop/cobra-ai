@@ -5,6 +5,7 @@ import ctypes
 import glob
 import logging
 import os
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -41,6 +42,7 @@ class Transcriber:
         """device: "cuda", "cpu" or "auto" (GPU if it works, else CPU)."""
         from faster_whisper import WhisperModel
 
+        self._lock = threading.Lock()  # live transcripts and the final one take turns
         attempts = [("cuda", "int8_float16"), ("cpu", "int8")]
         if device != "auto":
             attempts = [a for a in attempts if a[0] == device]
@@ -65,6 +67,7 @@ class Transcriber:
         return self._run(audio, vad=True)
 
     def _run(self, audio: np.ndarray, vad: bool) -> str:
-        segments, _ = self.model.transcribe(audio, language="en", beam_size=1, vad_filter=vad,
-                                            condition_on_previous_text=False)
-        return " ".join(s.text.strip() for s in segments).strip()
+        with self._lock:
+            segments, _ = self.model.transcribe(audio, language="en", beam_size=1,
+                                                vad_filter=vad, condition_on_previous_text=False)
+            return " ".join(s.text.strip() for s in segments).strip()
