@@ -1,0 +1,26 @@
+# Cobra config. Copy to ~/.config/cobra/config.toml to override.
+
+[brain]
+# local only for now; "claude" and "auto" arrive with the Claude brain
+mode = "local"
+
+[local]
+host = "http://localhost:11434"
+model = "qwen3:8b"
+vision_model = "gemma3:4b"
+# qwen3 can reason before answering; off keeps spoken replies fast
+think = false
+keep_alive = "10m"
+
+[claude]
+model = "claude-opus-5-5"
+fast_model = "claude-haiku-5-5"
+
+[voice]
+# Piper voice: female, British (used from milestone 2)
+piper_voice = "en_GB-cori-high"
+
+[agent]
+max_steps = 8
+history_turns = 12
+confirm_timeout = 20

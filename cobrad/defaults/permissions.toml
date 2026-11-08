@@ -1,0 +1,15 @@
+# What Cobra may do without asking.
+#   always — runs straight away
+#   ask    — confirm first (Y/N in the terminal, pop-up later)
+#   never  — blocked
+# Tools not listed fall back to their own default (usually "ask").
+
+[tools]
+system_stats = "always"
+hypr_windows = "always"
+hypr_action  = "always"
+hypr_close   = "ask"
+media        = "always"
+volume       = "always"
+brightness   = "always"
+apps_launch  = "always"
