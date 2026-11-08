@@ -1,6 +1,6 @@
 # What Cobra may do without asking.
 #   always — runs straight away
-#   ask    — confirm first (Y/N in the terminal, pop-up later)
+#   ask    — confirm first: a pop-up (Y / A / N), the terminal, or say yes / no
 #   never  — blocked
 # Tools not listed fall back to their own default (usually "ask").
 
@@ -13,3 +13,23 @@ media        = "always"
 volume       = "always"
 brightness   = "always"
 apps_launch  = "always"
+files_read   = "always"
+files_list   = "always"
+files_search = "always"
+files_write  = "ask"
+shell_run    = "ask"
+sudo_run     = "ask"
+files_delete = "never"
+
+[files]
+# Folders the file tools may use (folders that don't exist are ignored). Even inside these,
+# Cobra's own config, logs and state, ~/.ssh, keyrings and browser profiles are off-limits.
+allowed = [
+    "~/cobra-queen-dots",
+    "~/cobra-ai",
+    "~/notes",
+    "~/Documents",
+    "~/Projects",
+    "~/.config/hypr",
+    "~/.config/waybar",
+]

@@ -20,11 +20,14 @@ log = logging.getLogger(__name__)
 RATE = 16000
 FRAME = 512             # 32 ms, what Silero expects at 16 kHz
 CONTEXT = 64
-PREROLL_FRAMES = 16     # keep ~0.5 s from before speech was detected, so "Cobra" isn't clipped
-END_FRAMES = 22         # ~0.7 s of quiet ends a phrase
+PREROLL_FRAMES = 19     # keep ~0.6 s from before speech was detected, so "Cobra" isn't clipped
+END_FRAMES = 28         # ~0.9 s of quiet ends a phrase (people pause after "Cobra,")
 MIN_FRAMES = 8          # ignore blips shorter than ~0.25 s
 MAX_FRAMES = 15 * RATE // FRAME
 COOLDOWN = 0.6          # after she stops talking, her echo is still in the room
+# Silero's memory of a long quiet stretch makes it slow to notice the next word, so a short
+# "Cobra" would be half over before a phrase starts. Forget the quiet every ~2 s.
+RESET_QUIET_FRAMES = 60
 
 
 class VAD:
@@ -109,6 +112,7 @@ class WakeListener:
         phrase: list[np.ndarray] = []
         quiet = 0
         voiced = 0  # frames that actually sounded like speech (not the lead-in or pauses)
+        idle = 0    # quiet frames in a row while waiting for speech
         quiet_until = 0.0
         while True:
             block = self._blocks.get()
@@ -128,7 +132,12 @@ class WakeListener:
                 if not phrase:
                     preroll = (preroll + [frame])[-PREROLL_FRAMES:]
                     if prob >= self.start_threshold:
-                        phrase, preroll, quiet, voiced = preroll, [], 0, 1
+                        phrase, preroll, quiet, voiced, idle = preroll, [], 0, 1, 0
+                        continue
+                    idle = idle + 1 if prob < self.keep_threshold else 0
+                    if idle >= RESET_QUIET_FRAMES:
+                        self.vad.reset()
+                        idle = 0
                     continue
                 phrase.append(frame)
                 if prob >= self.keep_threshold:

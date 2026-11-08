@@ -57,6 +57,10 @@ def load_permissions() -> dict[str, str]:
     return _load_toml("permissions.toml").get("tools", {})
 
 
+def load_allowed_folders() -> list[str]:
+    return _load_toml("permissions.toml").get("files", {}).get("allowed", [])
+
+
 def load_persona() -> str:
     user = config_dir() / "persona.md"
     return (user if user.exists() else DEFAULTS / "persona.md").read_text(encoding="utf-8")

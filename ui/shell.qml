@@ -7,4 +7,5 @@ ShellRoot {
 
     Popup { cobra: cobra }
     Hud { cobra: cobra }
+    Confirm { cobra: cobra }
 }

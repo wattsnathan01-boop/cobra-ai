@@ -56,8 +56,15 @@ class Agent:
             for call in calls:
                 name, args = call["name"], call["arguments"]
                 await emit({"type": "tool", "name": name, "args": args, "status": "checking"})
-                allowed, reason = await self.gate.check(name, args, confirm)
                 started = time.monotonic()
+                try:
+                    # what the call would do (a diff, a command); a bad call fails right here
+                    preview = await hands.make_preview(name, args)
+                    allowed, reason = await self.gate.check(name, args, confirm, preview)
+                except hands.ToolError as e:
+                    allowed, reason, preview = False, str(e), None
+                if not allowed and self.gate.level(name) == "never":
+                    await emit({"type": "blocked", "tool": name, "args": args, "preview": preview})
                 if not allowed:
                     result, ok = f"Not done: {reason}.", False
                 else:

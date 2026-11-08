@@ -22,6 +22,10 @@ class Tool:
 
 
 TOOLS: dict[str, Tool] = {}
+# tool name -> async fn(**args) -> dict describing what it's about to do, for the confirm card.
+# Raising ToolError there means the call is wrong (e.g. text to replace isn't in the file), and
+# it fails without bothering the person.
+PREVIEWS: dict[str, Callable[..., Any]] = {}
 
 
 def tool(name: str, description: str, properties: dict | None = None,
@@ -40,6 +44,25 @@ def tool(name: str, description: str, properties: dict | None = None,
         )
         return func
     return register
+
+
+def preview(name: str):
+    """Register the preview function for a tool."""
+    def register(func):
+        PREVIEWS[name] = func
+        return func
+    return register
+
+
+async def make_preview(name: str, args: dict) -> dict | None:
+    """What a tool call would do, or None if the tool has no preview."""
+    fn = PREVIEWS.get(name)
+    if fn is None:
+        return None
+    try:
+        return await fn(**args)
+    except TypeError as e:
+        raise ToolError(f"bad arguments ({e})")
 
 
 def schemas() -> list[dict]:
@@ -81,4 +104,4 @@ async def sh(*cmd: str, timeout: float = 10) -> str:
 
 
 def load_all() -> None:
-    from . import apps, hypr, media, system  # noqa: F401  (registers tools)
+    from . import apps, files, hypr, media, shell, system  # noqa: F401  (registers tools)

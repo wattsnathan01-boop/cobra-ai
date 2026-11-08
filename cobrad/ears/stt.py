@@ -62,12 +62,14 @@ class Transcriber:
                 error = e
         raise RuntimeError(f"couldn't start Whisper: {error}")
 
-    def transcribe(self, audio: np.ndarray) -> str:
-        """audio: mono float32 at 16 kHz. Returns "" if nobody spoke."""
-        return self._run(audio, vad=True)
+    def transcribe(self, audio: np.ndarray, prompt: str | None = None, beam: int = 1) -> str:
+        """audio: mono float32 at 16 kHz. Returns "" if nobody spoke.
+        prompt: text Whisper treats as what came before, to make words like "Cobra" likelier."""
+        return self._run(audio, vad=True, prompt=prompt, beam=beam)
 
-    def _run(self, audio: np.ndarray, vad: bool) -> str:
+    def _run(self, audio: np.ndarray, vad: bool, prompt: str | None = None, beam: int = 1) -> str:
         with self._lock:
-            segments, _ = self.model.transcribe(audio, language="en", beam_size=1,
-                                                vad_filter=vad, condition_on_previous_text=False)
+            segments, _ = self.model.transcribe(audio, language="en", beam_size=beam,
+                                                vad_filter=vad, condition_on_previous_text=False,
+                                                initial_prompt=prompt)
             return " ".join(s.text.strip() for s in segments).strip()

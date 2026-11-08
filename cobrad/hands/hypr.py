@@ -10,10 +10,24 @@ async def _clients() -> list[dict]:
     return json.loads(await sh("hyprctl", "clients", "-j"))
 
 
-async def _dispatch(*args: str) -> None:
-    out = await sh("hyprctl", "dispatch", *args)
-    if out and out.lower() != "ok":
-        raise ToolError(out)
+def lua_str(s: str) -> str:
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+async def dispatch(lua: str, *legacy: str) -> None:
+    """Run a dispatcher. Hyprland 0.55+ with a Lua config takes Lua (hl.dsp.…); older
+    versions take the classic "dispatcher args" form, which `legacy` gives."""
+    try:
+        out = await sh("hyprctl", "dispatch", lua)
+    except ToolError as e:
+        out = str(e)
+    if out.strip().lower() == "ok":
+        return
+    if legacy and "invalid dispatcher" in out.lower():
+        out = await sh("hyprctl", "dispatch", *legacy)
+        if out.strip().lower() == "ok":
+            return
+    raise ToolError(out.strip() or "hyprctl dispatch failed")
 
 
 def find_window(clients: list[dict], target: str) -> dict:
@@ -62,20 +76,24 @@ async def hypr_action(action: str, window: str | None = None,
 
     if action == "focus":
         w = find_window(await _clients(), window)
-        await _dispatch("focuswindow", f"address:{w['address']}")
+        await dispatch(f"hl.dsp.focus({{ window = {lua_str('address:' + w['address'])} }})",
+                       "focuswindow", f"address:{w['address']}")
         return f"focused {w['class']}"
     if action == "move":
         w = find_window(await _clients(), window)
-        await _dispatch("movetoworkspacesilent", f"{workspace},address:{w['address']}")
+        await dispatch(f"hl.dsp.window.move({{ workspace = {int(workspace)}, follow = false, "
+                       f"window = {lua_str('address:' + w['address'])} }})",
+                       "movetoworkspacesilent", f"{workspace},address:{w['address']}")
         return f"moved {w['class']} to workspace {workspace}"
     if action == "workspace":
-        await _dispatch("workspace", str(workspace))
+        await dispatch(f"hl.dsp.focus({{ workspace = {int(workspace)} }})",
+                       "workspace", str(workspace))
         return f"switched to workspace {workspace}"
     if action == "fullscreen":
-        await _dispatch("fullscreen", "0")
+        await dispatch("hl.dsp.window.fullscreen()", "fullscreen", "0")
         return "toggled fullscreen"
     if action == "float":
-        await _dispatch("togglefloating")
+        await dispatch('hl.dsp.window.float({ action = "toggle" })', "togglefloating")
         return "toggled floating"
     raise ToolError(f"unknown action '{action}'")
 
@@ -87,5 +105,6 @@ async def hypr_action(action: str, window: str | None = None,
       permission="ask")
 async def hypr_close(window: str) -> str:
     w = find_window(await _clients(), window)
-    await _dispatch("closewindow", f"address:{w['address']}")
+    await dispatch(f"hl.dsp.window.close({{ window = {lua_str('address:' + w['address'])} }})",
+                   "closewindow", f"address:{w['address']}")
     return f"closed {w['class']}"

@@ -46,9 +46,17 @@ async def _ask(reader, writer, text: str, speak: bool = False) -> None:
             print(f"{MINT}cobra ›{RESET} ", end="", flush=True)
             mid_line = False
         elif kind == "confirm":
-            allow = await _confirm(ev, mid_line)
-            await _send(writer, {"type": "confirm_reply", "confirm_id": ev["confirm_id"],
-                                 "allow": allow})
+            answer = await _confirm(ev, mid_line)
+            if answer is not None:
+                await _send(writer, {"type": "confirm_reply", "confirm_id": ev["confirm_id"],
+                                     "allow": answer[0], "remember": answer[1]})
+            mid_line = False
+        elif kind == "confirmed":
+            print(f"{MUTED}    {'allowed' if ev['allow'] else 'denied'}{RESET}")
+            print(f"{MINT}cobra \u203a{RESET} ", end="", flush=True)
+        elif kind == "blocked":
+            print(f"{chr(10) if mid_line else ''}{CRIMSON}  \u2298 blocked: {ev['tool']} is set "
+                  f"to never{RESET}")
             mid_line = False
         elif kind == "error":
             print(f"\n{CRIMSON}  ! {ev['message']}{RESET}")
@@ -60,14 +68,36 @@ async def _ask(reader, writer, text: str, speak: bool = False) -> None:
             return  # stay connected until she's finished talking, or she'd be cut short
 
 
-async def _confirm(ev: dict, mid_line: bool) -> bool:
-    print(f"{chr(10) if mid_line else ''}{VIOLET}  ? Cobra wants to use {ev['tool']} "
-          f"{json.dumps(ev['args'])}. Allow? [y/N] {RESET}", end="", flush=True)
+def _show_preview(ev: dict) -> None:
+    p = ev.get("preview") or {}
+    if p.get("kind") == "command":
+        print(f"{MUTED}    {'#' if p.get('root') else '$'} {RESET}{p['command']}"
+              f"{MUTED}   (in {p['cwd']}){RESET}")
+    elif p.get("kind") in ("edit", "create"):
+        print(f"{MUTED}    {p['path']} \u00b7 {p['summary']}{RESET}")
+        for d in p.get("diff", []):
+            colour = {"+": MINT, "-": CRIMSON}.get(d["op"], MUTED)
+            print(f"{colour}    {d['op'] if d['op'] in '+-' else ' '} {d['text']}{RESET}")
+    else:
+        print(f"{MUTED}    {json.dumps(ev['args'])}{RESET}")
+
+
+async def _confirm(ev: dict, mid_line: bool) -> tuple[bool, bool] | None:
+    """(allow, remember), or None when an on-screen card is asking instead."""
+    print(f"{chr(10) if mid_line else ''}{VIOLET}  ? Cobra wants to use {ev['tool']}{RESET}")
+    _show_preview(ev)
+    if ev.get("card"):
+        print(f"{VIOLET}    answer on screen (Y / N) or say yes / no{RESET}")
+        return None
+    always = ev.get("always")
+    print(f"{VIOLET}    Allow? [y/N{'/a = always' if always else ''}] {RESET}", end="", flush=True)
     if not sys.stdin.isatty():
         print("n (no terminal to ask)")
-        return False
-    answer = await asyncio.to_thread(sys.stdin.readline)
-    return answer.strip().lower() in ("y", "yes")
+        return False, False
+    answer = (await asyncio.to_thread(sys.stdin.readline)).strip().lower()
+    if always and answer in ("a", "always"):
+        return True, True
+    return answer in ("y", "yes"), False
 
 
 async def _watch(reader, writer) -> None:

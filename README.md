@@ -6,9 +6,9 @@ tools, and asks before doing anything risky.
 
 ![Full HUD](design/previews/1-full-hud.png)
 
-> **Status: milestone 4 of 7.** Text chat, system tools, push-to-talk voice, the mini pop-up
-> and the full HUD work. Permissions for files and shell, then screen sharing, are next.
-> See [PLAN.md](PLAN.md).
+> **Status: milestone 5 of 7.** Voice (wake word or push-to-talk), the mini pop-up, the full
+> HUD, system tools, and files and shell commands behind confirm pop-ups all work. Screen
+> sharing is next. See [PLAN.md](PLAN.md).
 
 ## Install (Arch)
 
@@ -89,8 +89,20 @@ on the CPU. Both run locally. Change them under `[ears]` and `[voice]` in `confi
 | `media` | Play/pause, next, previous, what's playing | always |
 | `volume` / `brightness` | Get, set, up, down, mute | always |
 | `apps_launch` | Open an installed app | always |
+| `files_read` / `files_list` / `files_search` | Read, list and search files in allowed folders | always |
+| `files_write` | Edit or create a file; you see the diff first, the old version is kept as `.bak` | **ask** |
+| `shell_run` | Run a command as you; you see the exact command | **ask** |
+| `sudo_run` | Run a command as root through `pkexec` (your password prompt) | **ask** |
+| `files_delete` | Move a file to the trash | **never** |
 
-Change any of these in `~/.config/cobra/permissions.toml` (`always` / `ask` / `never`).
+Change any of these in `~/.config/cobra/permissions.toml` (`always` / `ask` / `never`), along
+with the `[files] allowed` folders. Paths are resolved for real (symlinks, `..`) before they're
+checked, and Cobra's own config and logs, `~/.ssh`, keyrings and browser profiles are off-limits
+even inside an allowed folder.
+
+**Ask** shows a confirm card in the middle of the screen: **Y** allow once, **A** always (not
+offered for commands), **N** or Esc deny, or just say "yes" / "no". No answer in 20 seconds
+means no. Something set to **never** shows a "Blocked" card instead.
 Every tool call is logged to `~/.local/state/cobra/audit.jsonl`.
 
 ## Config

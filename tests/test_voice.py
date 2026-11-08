@@ -76,6 +76,14 @@ class LoudVAD:
         return 0.9 if np.abs(frame).mean() > 0.05 else 0.0
 
 
+class CountingVAD(LoudVAD):
+    def __init__(self):
+        self.resets = 0
+
+    def reset(self):
+        self.resets += 1
+
+
 class WakeListenerTests(unittest.TestCase):
     def listen(self, audio, busy=lambda: False):
         phrases = []
@@ -95,8 +103,18 @@ class WakeListenerTests(unittest.TestCase):
         phrases = self.listen(np.concatenate([quiet, loud, quiet, loud, quiet]))
         self.assertEqual(len(phrases), 2)
         # each phrase is the speech plus a little lead-in and the quiet that ended it
-        self.assertTrue(all(16000 <= len(p) <= 16000 + (16 + 23) * FRAME for p in phrases),
+        self.assertTrue(all(16000 <= len(p) <= 16000 + (19 + 29) * FRAME for p in phrases),
                         [len(p) for p in phrases])
+
+    def test_forgets_long_quiet_so_the_next_word_is_caught_early(self):
+        vad = CountingVAD()
+        quiet = np.zeros(16000 * 5, np.float32)
+        blocks = [quiet[i:i + FRAME] for i in range(0, len(quiet), FRAME)]
+        wl = WakeListener(lambda a: None, lambda: False, vad=vad, input=FakeInput(blocks))
+        wl.start()
+        time.sleep(0.3)
+        wl.stop()
+        self.assertGreaterEqual(vad.resets, 2)  # ~5 s of quiet, reset every ~2 s
 
     def test_ignores_blips_and_her_own_voice(self):
         quiet = np.zeros(16000, np.float32)
@@ -215,7 +233,7 @@ class FakeTranscriber:
     def __init__(self, *texts):
         self.texts = list(texts)
 
-    def transcribe(self, audio):
+    def transcribe(self, audio, prompt=None, beam=1):
         return self.texts.pop(0)
 
 

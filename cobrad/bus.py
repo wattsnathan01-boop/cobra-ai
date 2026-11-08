@@ -8,7 +8,7 @@ Client → cobrad:
   {"type": "hud", "action"}                open the full HUD: toggle | show | hide
   {"type": "wake", "action"}               the "Cobra" wake word: on | off | toggle
   {"type": "stats"}                        system stats + what's playing, for the HUD
-  {"type": "confirm_reply", "confirm_id", "allow"}
+  {"type": "confirm_reply", "confirm_id", "allow", "remember"?}   remember: "Always"
   {"type": "subscribe"}                    receive every event (overlay, waybar); answered
                                            with hello {model, voice, stt} and the state
   {"type": "status"} / {"type": "reset"}
@@ -16,7 +16,10 @@ Client → cobrad:
 cobrad → client:
   state {state: idle|listening|thinking|speaking} · heard {text} · delta {text}
   partial {text}  (live transcript while listening; subscribers only)
-  tool {name, args, status, result?, ms?} · confirm {confirm_id, tool, args}
+  tool {name, args, status, result?, ms?}
+  confirm {confirm_id, tool, args, preview?, reason, timeout, always, card}  (asks to decide)
+  confirmed {confirm_id, allow}  (it was answered or timed out: close the card)
+  blocked {tool, args, preview?}  (a tool set to Never was tried)
   hud {action}  (subscribers only) · stats {cpu_percent, gpu, ..., playing}
   wake {on}  (to everyone, when it changes; also in hello)
   level {source: mic|voice, value 0..1}  (subscribers only, ~30×/s)
@@ -35,6 +38,7 @@ import uuid
 from pathlib import Path
 
 from .brain.agent import Agent
+from .gate import NO_ALWAYS
 from .voice import Voice
 from .voice.sentences import SentenceSplitter
 
@@ -51,6 +55,10 @@ PARTIAL_SECONDS = 0.7
 # "Cobra, …" / "Hey Cobra …" / "Okay Cobra" at the start of a phrase (and Whisper's near misses)
 _WAKE = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|oi)\W+)?(?:cobra|kobra|copra)s?\b\W*(.*)$",
                    re.IGNORECASE | re.DOTALL)
+
+# for phrases from the always-on mic: hinting her name (with a wider beam search) turns
+# mumbled starts like "bro what is the time" into "Cobra, what is the time?"
+WAKE_PROMPT = "Cobra, what's my GPU temperature? Cobra."
 
 _YES = re.compile(r"\b(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|allow|affirmative)\b")
 _NO = re.compile(r"\b(no|nope|nah|don't|do not|stop|cancel|deny)\b")
@@ -173,6 +181,8 @@ class Server:
             elif kind == "confirm_reply":
                 fut = self.pending.get(msg.get("confirm_id"))
                 if fut and not fut.done():
+                    if msg.get("allow") and msg.get("remember"):
+                        self.agent.gate.remember(fut.tool)
                     fut.set_result(bool(msg.get("allow")))
             elif kind == "subscribe":
                 self.subscribers.add(writer)
@@ -209,19 +219,30 @@ class Server:
             elif ev["type"] == "error":
                 speaker.say(ev["message"])
 
-        async def confirm(tool: str, args: dict) -> bool:
+        async def confirm(tool: str, args: dict, preview: dict | None = None) -> bool:
             cid = uuid.uuid4().hex
             fut = asyncio.get_running_loop().create_future()
+            fut.tool = tool
             self.pending[cid] = fut
+            allowed = False
             try:
                 if speaker:
                     how = ("Say yes or no." if self.wake and self.wake.running
                            else "Hold the talk key and say yes or no.")
-                    speaker.say(f"I need your okay to use {tool.replace('_', ' ')}. {how}")
-                await emit({"type": "confirm", "confirm_id": cid, "tool": tool, "args": args})
-                return await fut
+                    ask = (preview or {}).get("say") or \
+                        f"I need your okay to use {tool.replace('_', ' ')}."
+                    speaker.say(f"{ask} {how}")
+                await emit({"type": "confirm", "confirm_id": cid, "tool": tool, "args": args,
+                            "preview": preview, "reason": text,
+                            "timeout": self.agent.gate.confirm_timeout,
+                            "always": tool not in NO_ALWAYS,
+                            # an overlay will show a card, so a terminal shouldn't also prompt
+                            "card": any(s is not reply_to for s in self.subscribers)})
+                allowed = await fut
+                return allowed
             finally:
                 self.pending.pop(cid, None)
+                await emit({"type": "confirmed", "confirm_id": cid, "allow": allowed})
 
         async with self.lock:
             try:
@@ -371,7 +392,9 @@ class Server:
         if self.spoken_task and not self.spoken_task.done() and not self.pending:
             return  # she's busy with a question; push-to-talk can still interrupt
         awake = time.monotonic() < self.awake_until
-        text = await asyncio.to_thread(voice.transcriber.transcribe, audio)
+        hint = not awake and not self.pending
+        text = await asyncio.to_thread(voice.transcriber.transcribe, audio,
+                                       WAKE_PROMPT if hint else None, 5 if hint else 1)
         if not _WORDS.search(text):
             return
         if self.pending:  # waiting on yes/no: only a clear answer counts, not room chatter

@@ -4,7 +4,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import difflib
+
 from . import ToolError, sh, tool
+from .hypr import dispatch, lua_str
+
+# what people call their browser; mapped to the default web browser
+BROWSER_WORDS = {"browser", "web browser", "internet", "web", "google", "the internet"}
 
 
 def _app_dirs() -> list[Path]:
@@ -47,15 +53,33 @@ def match_app(apps: dict[str, str], name: str) -> tuple[str, str]:
     for app_name, desktop_id in apps.items():
         if n in app_name or n == desktop_id.lower():
             return app_name, desktop_id
-    raise ToolError(f"no installed app called '{name}'")
+    close = difflib.get_close_matches(n, list(apps), n=3, cutoff=0.5)
+    hint = f" Close matches: {', '.join(close)}." if close else ""
+    raise ToolError(f"no installed app called '{name}'.{hint} Use 'browser' for the web browser.")
+
+
+async def default_browser(apps: dict[str, str]) -> tuple[str, str] | None:
+    try:
+        desktop = (await sh("xdg-settings", "get", "default-web-browser")).removesuffix(".desktop")
+    except ToolError:
+        return None
+    for app_name, desktop_id in apps.items():
+        if desktop_id == desktop:
+            return app_name, desktop_id
+    return None
 
 
 @tool("apps_launch",
-      "Open an installed application by name, e.g. 'firefox', 'files', 'steam'.",
+      "Open an installed application by name, e.g. 'files', 'steam', 'kitty'. Use 'browser' "
+      "for the web browser (also when they say 'Google' or 'the internet').",
       properties={"name": {"type": "string"}},
       required=["name"],
       permission="always")
 async def apps_launch(name: str) -> str:
-    app_name, desktop_id = match_app(installed_apps(), name)
-    await sh("hyprctl", "dispatch", "exec", f"gtk-launch {desktop_id}")
+    apps = installed_apps()
+    found = await default_browser(apps) if name.lower().strip() in BROWSER_WORDS else None
+    app_name, desktop_id = found or match_app(apps, name)
+    # launched by Hyprland, not as a child of cobrad, so restarting Cobra doesn't close it
+    await dispatch(f"hl.dsp.exec_cmd({lua_str('gtk-launch ' + desktop_id)})",
+                   "exec", f"gtk-launch {desktop_id}")
     return f"launched {app_name}"

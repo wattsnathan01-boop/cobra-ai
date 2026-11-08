@@ -89,7 +89,7 @@ class AgentTests(unittest.TestCase):
         self.assertEqual([a["event"] for a in audit], ["decision", "result"])
 
     def test_ask_tool_denied_does_not_run(self):
-        async def say_no(tool, args):
+        async def say_no(tool, args, preview=None):
             return False
         agent, _ = make_agent([("", [{"name": "risky_test", "arguments": {}}]), ("Okay", None)])
         run(agent.ask("do it", self.emit, say_no))
@@ -97,7 +97,7 @@ class AgentTests(unittest.TestCase):
         self.assertIn("you denied it", agent.brain.seen[1][-1]["content"])
 
     def test_ask_tool_allowed_runs(self):
-        async def say_yes(tool, args):
+        async def say_yes(tool, args, preview=None):
             return True
         agent, _ = make_agent([("", [{"name": "risky_test", "arguments": {}}]), ("Done", None)])
         run(agent.ask("do it", self.emit, say_yes))
@@ -109,7 +109,7 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(RAN, [])
 
     def test_confirm_timeout_denies(self):
-        async def never_answers(tool, args):
+        async def never_answers(tool, args, preview=None):
             await asyncio.sleep(10)
         agent, _ = make_agent([("", [{"name": "risky_test", "arguments": {}}]), ("Okay", None)])
         run(agent.ask("do it", self.emit, never_answers))

@@ -10,8 +10,8 @@ from . import hands
 from .brain.agent import Agent
 from .brain.ollama import OllamaBrain
 from .bus import Server
-from .config import (data_dir, load_config, load_permissions, load_persona, socket_path,
-                     state_dir)
+from .config import (config_dir, data_dir, load_allowed_folders, load_config, load_permissions,
+                     load_persona, socket_path, state_dir)
 from .gate import Gate
 from .voice import Voice
 
@@ -83,6 +83,8 @@ async def amain() -> None:
         log.warning("brain mode '%s' isn't built yet; using local", cfg["brain"]["mode"])
 
     hands.load_all()
+    from .hands import files
+    files.configure(load_allowed_folders())
     local = cfg["local"]
     brain = OllamaBrain(local["host"], local["model"], local["think"], local["keep_alive"])
     if await brain.ping():
@@ -90,7 +92,8 @@ async def amain() -> None:
     else:
         log.warning("can't reach Ollama at %s yet; will keep trying per request", local["host"])
 
-    gate = Gate(load_permissions(), state_dir() / "audit.jsonl", cfg["agent"]["confirm_timeout"])
+    gate = Gate(load_permissions(), state_dir() / "audit.jsonl", cfg["agent"]["confirm_timeout"],
+                user_file=config_dir() / "permissions.toml")
     agent = Agent(brain, gate, load_persona(), cfg["agent"]["max_steps"],
                   cfg["agent"]["history_turns"])
     server = Server(agent, socket_path(), info={

@@ -19,6 +19,8 @@ Item {
     property real micLevel: 0
     property real voiceLevel: 0
 
+    property var card: null              // confirm waiting on you: the "confirm" event
+    property var blocked: null           // a Never tool was tried: the "blocked" event
     property bool hudOpen: false
     property bool wakeOn: false          // listening for "Cobra"
     property var stats: ({})            // system_stats + playing, polled while the HUD is open
@@ -37,6 +39,11 @@ Item {
         sock.flush()
     }
     function hush() { send({ type: "hush" }) }
+    function answer(allow, remember) {
+        if (!card) return
+        send({ type: "confirm_reply", confirm_id: card.confirm_id, allow: allow,
+               remember: !!remember })
+    }
     function ask(text) { send({ type: "ask", text: text, speak: true }) }
     function toggleListening() { send({ type: "listen", action: "toggle" }) }
     function requestStats() { send({ type: "stats" }) }
@@ -99,6 +106,15 @@ Item {
             break
         case "confirm":
             confirmTool = ev.tool
+            ev.shownAt = Date.now()
+            card = ev
+            break
+        case "confirmed":
+            if (card && card.confirm_id === ev.confirm_id) card = null
+            confirmTool = ""
+            break
+        case "blocked":
+            blocked = ev
             break
         case "error":
             error = ev.message

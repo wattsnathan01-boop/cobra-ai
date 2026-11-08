@@ -34,8 +34,9 @@ max_seconds = 30
 # say "Cobra, …" instead of holding SUPER+C. The mic stays open; phrases that don't start
 # with "Cobra" are dropped without being kept or logged. Toggle: cobractl wake on|off
 enabled = true
-# Silero voice-detector confidence needed to start a phrase (raise if noise sets it off)
-threshold = 0.6
+# Silero voice-detector confidence needed to start a phrase: lower hears quieter speech,
+# higher ignores more noise
+threshold = 0.5
 # after just "Cobra", how long she waits for the question
 follow_up_seconds = 8
 
