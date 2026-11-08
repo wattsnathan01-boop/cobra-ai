@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from typing import Awaitable, Callable
 
@@ -13,6 +14,16 @@ from .ollama import BrainError
 
 Emit = Callable[[dict], Awaitable[None]]
 log = logging.getLogger(__name__)
+
+# Saying she did (or is about to do) something, in a reply where no tool ran: nothing happened.
+_CLAIM = re.compile(
+    r"\b(i(?:'ll| will| shall) (?:remember|check|look|set|open|send|save|note|get|do that)"
+    r"|i(?:'ve| have) (?:remembered|saved|set|opened|sent|launched|closed|turned|changed|"
+    r"checked|noted|started|stopped|increased|decreased|muted|paused)"
+    r"|one moment|just a moment|let me (?:check|look|see|find))\b", re.IGNORECASE)
+NUDGE = ("You just said you'd do, or did, something, but you didn't call a tool, so nothing "
+         "happened. If one of your tools can do it, call it now. If not, tell the person plainly "
+         "that you can't do it.")
 
 
 class Agent:
@@ -46,6 +57,8 @@ class Agent:
         turn = [{"role": "user", "content": text}]
         tools = hands.schemas()
         reply = ""
+        used_tools = False
+        nudged_at: int | None = None  # where in `turn` an empty claim was caught
 
         for _ in range(self.max_steps):
             reply, calls = "", []
@@ -64,8 +77,15 @@ class Agent:
                 return ""
 
             turn.append(self.brain.assistant_message(reply, calls))
+            if not calls and not used_tools and nudged_at is None and _CLAIM.search(reply):
+                log.info("caught a claim with no tool behind it: %r", reply[:120])
+                nudged_at = len(turn) - 1
+                turn.append({"role": "system", "content": NUDGE})
+                await emit({"type": "delta", "text": " "})
+                continue
             if not calls:
                 break
+            used_tools = True
 
             for call in calls:
                 name, args = call["name"], call["arguments"]
@@ -97,6 +117,9 @@ class Agent:
         else:
             await emit({"type": "error", "message": "stopped after too many tool steps"})
 
+        if nudged_at is not None:
+            # don't keep the empty claim: she copies her own earlier replies
+            del turn[nudged_at:nudged_at + 2]
         self.history.extend(turn)
         if self.memory:
             self.memory.record(turn)

@@ -133,6 +133,21 @@ class AgentTests(unittest.TestCase):
         run(agent.ask("x", self.emit, None))
         self.assertIn("bad arguments", agent.brain.seen[1][-1]["content"])
 
+    def test_claiming_an_action_without_a_tool_gets_corrected(self):
+        agent, _ = make_agent([("I've saved that for you", None),           # empty claim
+                               ("", [{"name": "echo_test", "arguments": {"word": "x"}}]),
+                               ("Saved", None)])
+        reply = run(agent.ask("save it", self.emit, None))
+        self.assertEqual(RAN, [{"word": "x"}])
+        self.assertEqual(reply.strip(), "Saved")
+        # the empty claim isn't kept, so she can't copy it later
+        self.assertNotIn("I've saved that", " ".join(m["content"] for m in agent.history))
+
+    def test_honest_replies_are_left_alone(self):
+        agent, _ = make_agent([("Paris is the capital", None)])
+        run(agent.ask("capital of France?", self.emit, None))
+        self.assertEqual(len(agent.brain.seen), 1)
+
     def test_history_is_trimmed_to_recent_turns(self):
         agent, _ = make_agent([(f"r{i}", None) for i in range(5)], history_turns=2)
         for i in range(5):

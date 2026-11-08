@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+from pathlib import Path
 
 import psutil
 
@@ -10,7 +11,8 @@ from . import sh, tool
 
 
 @tool("system_stats",
-      "Current CPU load, memory use, temperatures, battery and NVIDIA GPU status.",
+      "Current CPU load, memory (RAM) use, temperatures, battery and charging, free disk space, "
+      "and NVIDIA GPU status.",
       permission="always")
 async def system_stats() -> dict:
     mem = psutil.virtual_memory()
@@ -25,6 +27,14 @@ async def system_stats() -> dict:
     cpu = temps.get("coretemp") or temps.get("k10temp") or []
     if cpu:
         stats["cpu_temp_c"] = round(max(s.current for s in cpu))
+
+    disks = {}
+    for label, path in (("system", "/"), ("home", str(Path.home()))):
+        usage = psutil.disk_usage(path)
+        disks[label] = {"free_gb": round(usage.free / 1e9, 1), "total_gb": round(usage.total / 1e9, 1)}
+    if disks["system"] == disks["home"]:
+        disks = {"main": disks["system"]}  # same partition
+    stats["disk"] = disks
 
     battery = psutil.sensors_battery()
     if battery:
