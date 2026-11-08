@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ── Cobra · installer (Arch Linux) ───────────────
-# Milestones 0–1: local brain (Ollama on the RTX 5060), cobrad daemon, cobractl CLI.
+# Milestones 0–2: local brain (Ollama on the RTX 5060), voice (Whisper + Piper),
+# cobrad daemon, cobractl CLI.
 # Run as your normal user from the repo folder:  bash install.sh
 set -euo pipefail
 
@@ -21,7 +22,7 @@ find "$DIR" -path "$DIR/.git" -prune -o -type f \
     -exec sed -i 's/\r$//' {} +
 
 say "Installing packages"
-sudo pacman -S --needed python ollama-cuda gtk3 playerctl brightnessctl wireplumber
+sudo pacman -S --needed python ollama-cuda gtk3 playerctl brightnessctl wireplumber portaudio
 
 say "Starting Ollama (runs on the RTX 5060)"
 sudo systemctl enable --now ollama
@@ -36,9 +37,12 @@ ollama pull "$MODEL"
 say "Setting up Python environment"
 python -m venv "$APP/venv"
 "$APP/venv/bin/pip" install --quiet --upgrade pip
-"$APP/venv/bin/pip" install --quiet -e "$DIR"
+"$APP/venv/bin/pip" install --quiet -e "$DIR[gpu]"
 mkdir -p "$HOME/.local/bin"
 ln -sf "$APP/venv/bin/cobractl" "$HOME/.local/bin/cobractl"
+
+say "Downloading the voice and Whisper (~1.7 GB, one time)"
+"$APP/venv/bin/cobrad" fetch-models
 
 say "Config (existing files are kept)"
 mkdir -p "$CONF"
@@ -65,9 +69,16 @@ hl.on("hyprland.start", ...) block of ~/.config/hypr/hyprland.lua
 
     hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && systemctl --user start cobra")
 
+For push-to-talk (hold SUPER+C), add to the keybinds in ~/.config/hypr/hyprland.lua:
+
+    hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen start"))
+    hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen stop"), { release = true })
+
 Then try:
     cobractl ask "how hot is my GPU?"
+    cobractl ask --say "say hello"
     cobractl chat
+    cobractl watch     (shows what she hears and says while you use SUPER+C)
 
 Logs:         journalctl --user -u cobra -f
 Audit trail:  ~/.local/state/cobra/audit.jsonl

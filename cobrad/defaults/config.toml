@@ -17,8 +17,18 @@ model = "claude-opus-5-5"
 fast_model = "claude-haiku-5-5"
 
 [voice]
-# Piper voice: female, British (used from milestone 2)
+# Piper voice, female, British for now (no Australian Piper voice exists yet).
+# Others to try: en_GB-jenny_dioco-medium, en_GB-southern_english_female-low
+# Change it, then: systemctl --user restart cobra  (new voices download on first start)
 piper_voice = "en_GB-cori-high"
+
+[ears]
+# faster-whisper model; "small.en" is lighter if VRAM gets tight
+whisper_model = "large-v3-turbo"
+# "auto" uses the GPU when it works, otherwise the CPU (slower)
+device = "auto"
+# longest single push-to-talk recording
+max_seconds = 30
 
 [agent]
 max_steps = 8

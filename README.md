@@ -6,8 +6,8 @@ tools, and asks before doing anything risky.
 
 ![Full HUD](design/previews/1-full-hud.png)
 
-> **Status: milestone 1 of 7.** Text chat with the local brain and system tools works.
-> Voice, the overlay and screen sharing are next. See [PLAN.md](PLAN.md).
+> **Status: milestone 2 of 7.** Text chat, system tools and push-to-talk voice work.
+> The overlay and screen sharing are next. See [PLAN.md](PLAN.md).
 
 ## Install (Arch)
 
@@ -17,8 +17,8 @@ cd ~/cobra-ai
 bash install.sh
 ```
 
-It installs Ollama (CUDA build), downloads `qwen3:8b` (~5 GB), sets up the `cobrad` service
-and puts `cobractl` on your path.
+It installs Ollama (CUDA build), downloads `qwen3:8b` (~5 GB), the Whisper speech model
+(~1.6 GB) and a Piper voice, sets up the `cobrad` service and puts `cobractl` on your path.
 
 ## Use
 
@@ -28,6 +28,28 @@ cobractl ask "put youtube on workspace 3"
 cobractl chat          # back-and-forth; /reset to start fresh
 cobractl status
 ```
+
+### Voice
+
+Add push-to-talk to the keybinds in `~/.config/hypr/hyprland.lua`:
+
+```lua
+hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen start"))
+hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen stop"), { release = true })
+```
+
+Hold SUPER+C, talk, let go. She answers out loud, starting as soon as her first sentence is
+ready. Press SUPER+C while she's talking or thinking to cut her off and ask something else.
+When she needs permission, hold SUPER+C and say "yes" or "no".
+
+```sh
+cobractl watch            # see what she hears and says, live
+cobractl ask --say "hi"   # typed question, spoken answer
+cobractl hush             # stop talking
+```
+
+Speech-to-text is Whisper `large-v3-turbo` on the GPU; speech is Piper (`en_GB-cori-high`),
+on the CPU. Both run locally. Change them under `[ears]` and `[voice]` in `config.toml`.
 
 ## What she can do so far
 

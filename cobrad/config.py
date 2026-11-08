@@ -20,6 +20,10 @@ def state_dir() -> Path:
     return _xdg("XDG_STATE_HOME", ".local/state") / "cobra"
 
 
+def data_dir() -> Path:
+    return _xdg("XDG_DATA_HOME", ".local/share") / "cobra"
+
+
 def socket_path() -> Path:
     runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/tmp/cobra-{os.getuid()}"
     return Path(runtime) / "cobra.sock"

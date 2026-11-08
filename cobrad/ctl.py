@@ -26,8 +26,8 @@ async def _send(writer: asyncio.StreamWriter, msg: dict) -> None:
     await writer.drain()
 
 
-async def _ask(reader, writer, text: str) -> None:
-    await _send(writer, {"type": "ask", "id": uuid.uuid4().hex, "text": text})
+async def _ask(reader, writer, text: str, speak: bool = False) -> None:
+    await _send(writer, {"type": "ask", "id": uuid.uuid4().hex, "text": text, "speak": speak})
     print(f"{MINT}cobra ›{RESET} ", end="", flush=True)
     mid_line = False
     async for line in reader:
@@ -67,6 +67,42 @@ async def _confirm(ev: dict, mid_line: bool) -> bool:
     return answer.strip().lower() in ("y", "yes")
 
 
+async def _watch(reader, writer) -> None:
+    """Show what Cobra hears, thinks and says, live (until the overlay exists)."""
+    await _send(writer, {"type": "subscribe"})
+    print(f"{MUTED}Watching Cobra. Ctrl+C to stop.{RESET}")
+    mid_line = False
+    async for line in reader:
+        ev = json.loads(line)
+        kind = ev.get("type")
+        if kind == "state" and ev["state"] in ("listening", "thinking"):
+            print(f"{chr(10) if mid_line else ''}{MUTED}  … {ev['state']}{RESET}")
+            mid_line = False
+        elif kind == "heard":
+            print(f"{chr(10) if mid_line else ''}{VIOLET}you ›{RESET} {ev['text']}")
+            mid_line = False
+        elif kind == "delta":
+            if not mid_line:
+                print(f"{MINT}cobra ›{RESET} ", end="")
+            print(ev["text"], end="", flush=True)
+            mid_line = True
+        elif kind == "tool" and ev["status"] in ("done", "failed"):
+            colour = MUTED if ev["status"] == "done" else CRIMSON
+            print(f"{chr(10) if mid_line else ''}{colour}  {'✓' if ev['status'] == 'done' else '✗'} "
+                  f"{ev['name']} {json.dumps(ev['args'])}{RESET}")
+            mid_line = False
+        elif kind == "confirm":
+            print(f"{chr(10) if mid_line else ''}{VIOLET}  ? wants to use {ev['tool']} "
+                  f"{json.dumps(ev['args'])}; say yes or no{RESET}")
+            mid_line = False
+        elif kind == "error":
+            print(f"{chr(10) if mid_line else ''}{CRIMSON}  ! {ev['message']}{RESET}")
+            mid_line = False
+        elif kind == "done" and mid_line:
+            print()
+            mid_line = False
+
+
 async def _simple(reader, writer, msg: dict) -> None:
     await _send(writer, msg)
     print(json.loads(await reader.readline()).get("state", "?"))
@@ -76,7 +112,7 @@ async def amain(args: argparse.Namespace) -> None:
     reader, writer = await _connect()
     try:
         if args.cmd == "ask":
-            await _ask(reader, writer, " ".join(args.text))
+            await _ask(reader, writer, " ".join(args.text), args.say)
         elif args.cmd == "chat":
             print(f"{MUTED}Talking to Cobra. Ctrl+D to leave, /reset to start fresh.{RESET}")
             while True:
@@ -89,6 +125,12 @@ async def amain(args: argparse.Namespace) -> None:
                     await _simple(reader, writer, {"type": "reset"})
                 elif text.strip():
                     await _ask(reader, writer, text)
+        elif args.cmd == "listen":
+            await _send(writer, {"type": "listen", "action": args.action})
+        elif args.cmd == "hush":
+            await _send(writer, {"type": "hush"})
+        elif args.cmd == "watch":
+            await _watch(reader, writer)
         elif args.cmd == "status":
             await _simple(reader, writer, {"type": "status"})
         elif args.cmd == "reset":
@@ -101,9 +143,14 @@ def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="cobractl", description="Talk to Cobra.")
     sub = p.add_subparsers(dest="cmd", required=True)
     ask = sub.add_parser("ask", help="ask one question")
+    ask.add_argument("--say", action="store_true", help="speak the reply out loud too")
     ask.add_argument("text", nargs="+")
     sub.add_parser("chat", help="back-and-forth conversation")
-    sub.add_parser("status", help="idle / thinking / speaking")
+    listen = sub.add_parser("listen", help="push-to-talk (bind start to key press, stop to release)")
+    listen.add_argument("action", choices=["start", "stop", "toggle", "cancel"])
+    sub.add_parser("hush", help="stop talking")
+    sub.add_parser("watch", help="show what she hears and says, live")
+    sub.add_parser("status", help="idle / listening / thinking / speaking")
     sub.add_parser("reset", help="forget the conversation so far")
     try:
         asyncio.run(amain(p.parse_args(argv)))
