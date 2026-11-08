@@ -6,8 +6,9 @@ tools, and asks before doing anything risky.
 
 ![Full HUD](design/previews/1-full-hud.png)
 
-> **Status: milestone 3 of 7.** Text chat, system tools, push-to-talk voice and the mini
-> pop-up work. The full HUD and screen sharing are next. See [PLAN.md](PLAN.md).
+> **Status: milestone 4 of 7.** Text chat, system tools, push-to-talk voice, the mini pop-up
+> and the full HUD work. Permissions for files and shell, then screen sharing, are next.
+> See [PLAN.md](PLAN.md).
 
 ## Install (Arch)
 
@@ -39,6 +40,13 @@ hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen start"))
 hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen stop"), { release = true })
 ```
 
+Or just say **"Cobra, …"**: "Cobra, what's my GPU at?" works in one breath, and "Cobra" on its
+own gets a "Yes?" and she waits for the question. The mic stays open for this; a voice
+detector (Silero, on the CPU) cuts what it hears into phrases and Whisper checks whether each
+starts with her name. Anything else is dropped without being kept or logged. Turn it off with
+`cobractl wake off` (or `enabled = false` under `[wake]` in `config.toml`). She doesn't listen
+for her name while she's talking, so use SUPER+C to interrupt her.
+
 Hold SUPER+C, talk, let go. She answers out loud, starting as soon as her first sentence is
 ready. Press SUPER+C while she's talking or thinking to cut her off and ask something else.
 When she needs permission, hold SUPER+C and say "yes" or "no".
@@ -58,6 +66,14 @@ A Quickshell overlay in the top-right corner shows what she's doing: your words 
 talks. It fades out a few seconds after she finishes. The button on the right cancels listening
 or stops her talking. Start it with `qs -n -c cobra` (install.sh prints the Hyprland autostart
 line and a blur rule).
+
+### Full HUD
+
+SUPER+SHIFT+C (or `cobractl hud`) opens the full HUD on the monitor you're using: her face in
+the hood with a ring of bars that follows your voice and hers, live system stats and what's
+playing on the left, the tools she just used on the right, and the conversation underneath.
+TAB types a question instead of speaking; ESC closes it. Add the SUPER+SHIFT+C bind and the
+`cobra-hud` blur rule that install.sh prints.
 
 Speech-to-text is Whisper `large-v3-turbo` on the GPU; speech is Piper (`en_GB-cori-high`),
 on the CPU. Both run locally. Change them under `[ears]` and `[voice]` in `config.toml`.

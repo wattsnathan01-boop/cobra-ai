@@ -5,6 +5,9 @@ Client → cobrad:
                                            speak: also say the reply out loud
   {"type": "listen", "action"}             push-to-talk: start | stop | toggle | cancel
   {"type": "hush"}                         stop talking (and stop the spoken question)
+  {"type": "hud", "action"}                open the full HUD: toggle | show | hide
+  {"type": "wake", "action"}               the "Cobra" wake word: on | off | toggle
+  {"type": "stats"}                        system stats + what's playing, for the HUD
   {"type": "confirm_reply", "confirm_id", "allow"}
   {"type": "subscribe"}                    receive every event (overlay, waybar); answered
                                            with hello {model, voice, stt} and the state
@@ -13,7 +16,9 @@ Client → cobrad:
 cobrad → client:
   state {state: idle|listening|thinking|speaking} · heard {text} · delta {text}
   partial {text}  (live transcript while listening; subscribers only)
-  tool {name, args, status, result?} · confirm {confirm_id, tool, args}
+  tool {name, args, status, result?, ms?} · confirm {confirm_id, tool, args}
+  hud {action}  (subscribers only) · stats {cpu_percent, gpu, ..., playing}
+  wake {on}  (to everyone, when it changes; also in hello)
   level {source: mic|voice, value 0..1}  (subscribers only, ~30×/s)
   error {message} · done {text} · status {state}
 """
@@ -43,8 +48,18 @@ _WORDS = re.compile(r"\w")
 # how often the live transcript is refreshed while you talk
 PARTIAL_SECONDS = 0.7
 
+# "Cobra, …" / "Hey Cobra …" / "Okay Cobra" at the start of a phrase (and Whisper's near misses)
+_WAKE = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|oi)\W+)?(?:cobra|kobra|copra)s?\b\W*(.*)$",
+                   re.IGNORECASE | re.DOTALL)
+
 _YES = re.compile(r"\b(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|allow|affirmative)\b")
 _NO = re.compile(r"\b(no|nope|nah|don't|do not|stop|cancel|deny)\b")
+
+
+def match_wake(text: str) -> str | None:
+    """What was asked after "Cobra" ("" if just her name), or None if it wasn't for her."""
+    m = _WAKE.match(text)
+    return m.group(1).strip() if m else None
 
 
 def parse_yes_no(text: str) -> bool:
@@ -53,9 +68,26 @@ def parse_yes_no(text: str) -> bool:
     return not _NO.search(text) and bool(_YES.search(text))
 
 
+async def _stats() -> dict:
+    from .hands import ToolError
+    from .hands.media import media
+    from .hands.system import system_stats
+    try:
+        stats = await system_stats()
+    except Exception:
+        log.exception("stats failed")
+        stats = {}
+    try:
+        playing = await media("status")
+        stats["playing"] = "" if playing == "nothing is playing" else playing
+    except ToolError:
+        stats["playing"] = ""
+    return stats
+
+
 class Server:
     def __init__(self, agent: Agent, path: Path, voice: Voice | None = None,
-                 info: dict | None = None):
+                 info: dict | None = None, follow_up_seconds: float = 8):
         self.agent = agent
         self.path = path
         self.voice = voice
@@ -69,6 +101,9 @@ class Server:
         self.spoken_task: asyncio.Task | None = None  # the voice question being answered
         self._listen_session = 0
         self._early_stop = 0.0
+        self.wake = None                 # ears.wake.WakeListener, if hands-free is set up
+        self.follow_up_seconds = follow_up_seconds
+        self.awake_until = 0.0           # after "Cobra" on its own: listening without the name
         self._bg: set[asyncio.Task] = set()
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -81,6 +116,8 @@ class Server:
         log.info("listening on %s", self.path)
 
     async def close(self) -> None:
+        if self.wake:
+            self.wake.stop()
         if self.voice and self.voice.recorder.recording:
             self.voice.recorder.stop()
         if self.voice and self.voice.speaker:
@@ -124,13 +161,23 @@ class Server:
                 await self._listen(msg.get("action", "toggle"))
             elif kind == "hush":
                 await self._hush()
+            elif kind == "hud":
+                await self._broadcast({"type": "hud", "action": msg.get("action", "toggle")})
+            elif kind == "wake":
+                await self._set_wake(msg.get("action", "toggle"))
+                if writer not in self.subscribers:
+                    await self._send(writer, {"type": "wake",
+                                              "on": bool(self.wake and self.wake.running)})
+            elif kind == "stats":
+                await self._send(writer, {"type": "stats", **await _stats()})
             elif kind == "confirm_reply":
                 fut = self.pending.get(msg.get("confirm_id"))
                 if fut and not fut.done():
                     fut.set_result(bool(msg.get("allow")))
             elif kind == "subscribe":
                 self.subscribers.add(writer)
-                await self._send(writer, {"type": "hello", **self.info})
+                await self._send(writer, {"type": "hello", **self.info,
+                                          "wake": bool(self.wake and self.wake.running)})
                 await self._send(writer, {"type": "state", "state": self.state})
             elif kind == "status":
                 await self._send(writer, {"type": "status", "state": self.state})
@@ -168,8 +215,9 @@ class Server:
             self.pending[cid] = fut
             try:
                 if speaker:
-                    speaker.say(f"I need your okay to use {tool.replace('_', ' ')}. "
-                                "Hold the talk key and say yes or no.")
+                    how = ("Say yes or no." if self.wake and self.wake.running
+                           else "Hold the talk key and say yes or no.")
+                    speaker.say(f"I need your okay to use {tool.replace('_', ' ')}. {how}")
                 await emit({"type": "confirm", "confirm_id": cid, "tool": tool, "args": args})
                 return await fut
             finally:
@@ -296,6 +344,69 @@ class Server:
         self.spoken_task = asyncio.create_task(self._ask(text, None, speak=True))
         self._bg.add(self.spoken_task)
         self.spoken_task.add_done_callback(self._bg.discard)
+
+    # ── hands-free ("Cobra, …") ─────────────────────────────────────────
+
+    async def _set_wake(self, action: str) -> None:
+        if self.wake is None:
+            await self._broadcast({"type": "error", "message": "the wake word isn't set up"})
+            return
+        on = not self.wake.running if action == "toggle" else action == "on"
+        try:
+            self.wake.start() if on else self.wake.stop()
+        except Exception as e:
+            log.exception("couldn't switch the wake word")
+            await self._broadcast({"type": "error", "message": f"wake word: {e}"})
+        await self._broadcast({"type": "wake", "on": self.wake.running})
+
+    def heard_phrase(self, audio) -> None:
+        """A phrase from the always-on mic. Called from the wake listener's thread."""
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(self._spawn, self._on_phrase(audio))
+
+    async def _on_phrase(self, audio) -> None:
+        voice = self.voice
+        if voice is None or voice.transcriber is None or voice.recorder.recording:
+            return
+        if self.spoken_task and not self.spoken_task.done() and not self.pending:
+            return  # she's busy with a question; push-to-talk can still interrupt
+        awake = time.monotonic() < self.awake_until
+        text = await asyncio.to_thread(voice.transcriber.transcribe, audio)
+        if not _WORDS.search(text):
+            return
+        if self.pending:  # waiting on yes/no: only a clear answer counts, not room chatter
+            lowered = text.lower()
+            if _YES.search(lowered) or _NO.search(lowered):
+                await self._broadcast({"type": "heard", "text": text})
+                fut = list(self.pending.values())[-1]
+                if not fut.done():
+                    fut.set_result(parse_yes_no(text))
+            return
+        question = text if awake else match_wake(text)
+        if question is None:
+            return  # not for her; deliberately not logged
+        log.info("wake: %r", text)
+        self.awake_until = 0.0
+        if not _WORDS.search(question):
+            self._spawn(self._wake_up())
+            return
+        self.spoken_task = asyncio.create_task(self._ask(question, None, speak=True))
+        self._bg.add(self.spoken_task)
+        self.spoken_task.add_done_callback(self._bg.discard)
+
+    async def _wake_up(self) -> None:
+        """Just "Cobra": answer, then listen for the question without needing her name."""
+        speaker = self.voice.speaker
+        if speaker:
+            speaker.say("Yes?")
+            await speaker.wait()
+        self.awake_until = time.monotonic() + self.follow_up_seconds
+        await self._set_state("listening")
+        await asyncio.sleep(self.follow_up_seconds)
+        if self.awake_until and time.monotonic() >= self.awake_until:
+            self.awake_until = 0.0
+            if self.state == "listening" and not self.voice.recorder.recording:
+                await self._set_state(self._resting_state())
 
     async def _hush(self) -> None:
         if self.voice and self.voice.speaker:

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ── Cobra · installer (Arch Linux) ───────────────
-# Milestones 0–3: local brain (Ollama on the RTX 5060), voice (Whisper + Piper),
-# cobrad daemon, cobractl CLI, Quickshell overlay.
+# Milestones 0–4: local brain (Ollama on the RTX 5060), voice (Whisper + Piper),
+# cobrad daemon, cobractl CLI, Quickshell overlay (mini pop-up and full HUD).
 # Run as your normal user from the repo folder:  bash install.sh
 set -euo pipefail
 
@@ -74,14 +74,17 @@ hl.on("hyprland.start", ...) block of ~/.config/hypr/hyprland.lua
     hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP && systemctl --user start cobra")
     hl.exec_cmd("qs -n -c cobra")
 
-and this with the other layer rules, to blur behind the pop-up:
+and these with the other layer rules, to blur behind the pop-up and the HUD:
 
     hl.layer_rule({ name = "blur-cobra", match = { namespace = "cobra" }, blur = true, ignore_alpha = 0.2 })
+    hl.layer_rule({ name = "blur-cobra-hud", match = { namespace = "cobra-hud" }, blur = true })
 
-For push-to-talk (hold SUPER+C), add to the keybinds in ~/.config/hypr/hyprland.lua:
+For push-to-talk (hold SUPER+C) and the full HUD (SUPER+SHIFT+C), add to the keybinds in
+~/.config/hypr/hyprland.lua:
 
     hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen start"))
     hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen stop"), { release = true })
+    hl.bind(mod .. " + SHIFT + C", hl.dsp.exec_cmd("~/.local/bin/cobractl hud"))
 
 Then try:
     cobractl ask "how hot is my GPU?"

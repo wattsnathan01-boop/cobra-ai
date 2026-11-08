@@ -78,6 +78,8 @@ class AgentTests(unittest.TestCase):
         agent, tmp = make_agent([("", [{"name": "echo_test", "arguments": {"word": "hiss"}}]),
                                  ("Done", None)])
         reply = run(agent.ask("say hiss", self.emit, None))
+        done = next(e for e in self.events if e["type"] == "tool" and e["status"] == "done")
+        self.assertIsInstance(done["ms"], int)
         self.assertEqual(RAN, [{"word": "hiss"}])
         self.assertEqual(reply.strip(), "Done")
         last_call = agent.brain.seen[1][-1]

@@ -42,6 +42,21 @@ def setup_voice(cfg: dict, server: Server) -> Voice | None:
     return voice
 
 
+def setup_wake(cfg: dict, server: Server) -> None:
+    """Hands-free listening for "Cobra"."""
+    from .ears.wake import WakeListener
+    voice = server.voice
+    server.wake = WakeListener(
+        server.heard_phrase,
+        busy=lambda: voice.recorder.recording or bool(voice.speaker and voice.speaker.speaking),
+        threshold=cfg["wake"]["threshold"])
+    if cfg["wake"]["enabled"]:
+        try:
+            server.wake.start()
+        except Exception:
+            log.exception("couldn't start the wake word; push-to-talk still works")
+
+
 async def load_ears(cfg: dict, voice: Voice) -> None:
     from .ears.stt import Transcriber
     ears = cfg["ears"]
@@ -80,9 +95,11 @@ async def amain() -> None:
                   cfg["agent"]["history_turns"])
     server = Server(agent, socket_path(), info={
         "brain": "local", "model": local["model"], "voice": cfg["voice"]["piper_voice"],
-        "stt": cfg["ears"]["whisper_model"]})
+        "stt": cfg["ears"]["whisper_model"]}, follow_up_seconds=cfg["wake"]["follow_up_seconds"])
     server.voice = setup_voice(cfg, server)
     await server.start()
+    if server.voice:
+        setup_wake(cfg, server)
     ears = asyncio.create_task(load_ears(cfg, server.voice)) if server.voice else None
 
     stop = asyncio.Event()

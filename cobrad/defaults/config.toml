@@ -30,6 +30,15 @@ device = "auto"
 # longest single push-to-talk recording
 max_seconds = 30
 
+[wake]
+# say "Cobra, …" instead of holding SUPER+C. The mic stays open; phrases that don't start
+# with "Cobra" are dropped without being kept or logged. Toggle: cobractl wake on|off
+enabled = true
+# Silero voice-detector confidence needed to start a phrase (raise if noise sets it off)
+threshold = 0.6
+# after just "Cobra", how long she waits for the question
+follow_up_seconds = 8
+
 [agent]
 max_steps = 8
 history_turns = 12

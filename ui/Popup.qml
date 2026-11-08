@@ -13,7 +13,7 @@ PanelWindow {
 
     readonly property int glow: 18  // room around the card for its glow
     readonly property bool active: cobra.mode !== "idle"
-    readonly property bool shown: active || linger.running
+    readonly property bool shown: (active || linger.running) && !cobra.hudOpen
     readonly property string mode: cobra.mode
     readonly property color accent: cobra.error !== "" && !active ? theme.crimson
                                                                   : theme.accent(mode)
@@ -43,7 +43,8 @@ PanelWindow {
                 : "Thinking · local · " + cobra.model
         if (mode === "speaking")
             return tail(cobra.reply.trim(), 72)
-        return cobra.error || cobra.reply.trim() || "Hold SUPER+C to talk"
+        return cobra.error || cobra.reply.trim()
+            || (cobra.wakeOn ? "Say \u201cCobra\u201d or hold SUPER+C" : "Hold SUPER+C to talk")
     }
     readonly property string caption: {
         if (mode === "listening") return cobra.stt.split("-")[0] === "large"
@@ -51,7 +52,8 @@ PanelWindow {
         if (mode === "thinking") return cobra.tool !== "" ? "tool: " + cobra.tool
                                        : cobra.transcript !== "" ? "you: " + cobra.transcript : ""
         if (mode === "speaking") return "piper · " + cobra.voice.split("-")[0]
-        return cobra.online ? "push-to-talk ready" : "cobrad offline"
+        return !cobra.online ? "cobrad offline"
+             : cobra.wakeOn ? "wake word armed" : "push-to-talk ready"
     }
     // Nerd Font Material Design icons
     readonly property string icon: String.fromCodePoint(

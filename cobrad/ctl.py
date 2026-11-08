@@ -130,6 +130,12 @@ async def amain(args: argparse.Namespace) -> None:
                     await _ask(reader, writer, text)
         elif args.cmd == "listen":
             await _send(writer, {"type": "listen", "action": args.action})
+        elif args.cmd == "wake":
+            await _send(writer, {"type": "wake", "action": args.action})
+            ev = json.loads(await reader.readline())
+            print("on" if ev.get("on") else ev.get("message", "off"))
+        elif args.cmd == "hud":
+            await _send(writer, {"type": "hud", "action": args.action})
         elif args.cmd == "hush":
             await _send(writer, {"type": "hush"})
         elif args.cmd == "watch":
@@ -152,6 +158,10 @@ def main(argv: list[str] | None = None) -> None:
     listen = sub.add_parser("listen", help="push-to-talk (bind start to key press, stop to release)")
     listen.add_argument("action", choices=["start", "stop", "toggle", "cancel"])
     sub.add_parser("hush", help="stop talking")
+    wake = sub.add_parser("wake", help='turn the "Cobra" wake word on or off')
+    wake.add_argument("action", nargs="?", default="toggle", choices=["toggle", "on", "off"])
+    hud = sub.add_parser("hud", help="open or close the full HUD")
+    hud.add_argument("action", nargs="?", default="toggle", choices=["toggle", "show", "hide"])
     sub.add_parser("watch", help="show what she hears and says, live")
     sub.add_parser("status", help="idle / listening / thinking / speaking")
     sub.add_parser("reset", help="forget the conversation so far")

@@ -8,8 +8,9 @@ from pathlib import Path
 
 import numpy as np
 
-from cobrad.bus import Server, parse_yes_no
+from cobrad.bus import Server, match_wake, parse_yes_no
 from cobrad.ears.mic import Recorder
+from cobrad.ears.wake import FRAME, WakeListener
 from cobrad.voice import Voice
 from cobrad.voice.sentences import SentenceSplitter, clean_for_speech
 from cobrad.voice.speaker import Speaker
@@ -48,6 +49,61 @@ class YesNoTests(unittest.TestCase):
         self.assertFalse(parse_yes_no("No."))
         self.assertFalse(parse_yes_no("no, don't"))
         self.assertFalse(parse_yes_no("what's the weather"))  # unclear means no
+
+
+class WakeMatchTests(unittest.TestCase):
+    def test_her_name_at_the_start(self):
+        self.assertEqual(match_wake("Cobra, what's my GPU temperature?"),
+                         "what's my GPU temperature?")
+        self.assertEqual(match_wake("Hey Cobra pause the music"), "pause the music")
+        self.assertEqual(match_wake("Ok Cobra, turn the volume down."), "turn the volume down.")
+        self.assertEqual(match_wake("Kobra."), "")
+        self.assertEqual(match_wake("Cobra"), "")
+
+    def test_not_for_her(self):
+        self.assertIsNone(match_wake("I saw a cobra at the zoo yesterday."))
+        self.assertIsNone(match_wake("Cobrand is a company"))
+        self.assertIsNone(match_wake("what's the weather"))
+
+
+class LoudVAD:
+    """Speech wherever the audio is loud."""
+
+    def reset(self):
+        pass
+
+    def __call__(self, frame):
+        return 0.9 if np.abs(frame).mean() > 0.05 else 0.0
+
+
+class WakeListenerTests(unittest.TestCase):
+    def listen(self, audio, busy=lambda: False):
+        phrases = []
+        blocks = [audio[i:i + FRAME] for i in range(0, len(audio), FRAME)]
+        wl = WakeListener(phrases.append, busy, vad=LoudVAD(), input=FakeInput(blocks))
+        wl.start()
+        for _ in range(200):
+            if wl._blocks.empty():
+                break
+            time.sleep(0.01)
+        time.sleep(0.05)
+        wl.stop()
+        return phrases
+
+    def test_cuts_speech_into_phrases(self):
+        quiet, loud = np.zeros(16000, np.float32), np.full(16000, 0.2, np.float32)
+        phrases = self.listen(np.concatenate([quiet, loud, quiet, loud, quiet]))
+        self.assertEqual(len(phrases), 2)
+        # each phrase is the speech plus a little lead-in and the quiet that ended it
+        self.assertTrue(all(16000 <= len(p) <= 16000 + (16 + 23) * FRAME for p in phrases),
+                        [len(p) for p in phrases])
+
+    def test_ignores_blips_and_her_own_voice(self):
+        quiet = np.zeros(16000, np.float32)
+        blip = np.full(FRAME * 3, 0.2, np.float32)
+        self.assertEqual(self.listen(np.concatenate([quiet, blip, quiet])), [])
+        loud = np.full(16000, 0.2, np.float32)
+        self.assertEqual(self.listen(np.concatenate([quiet, loud, quiet]), busy=lambda: True), [])
 
 
 class FakeTTS:
@@ -308,9 +364,55 @@ class VoiceBusTests(unittest.TestCase):
             return events
 
         events = run(go())
-        self.assertEqual(events[0], {"type": "hello", "model": "qwen3:8b"})
+        self.assertEqual(events[0], {"type": "hello", "model": "qwen3:8b", "wake": False})
         self.assertIn({"type": "state", "state": "listening"}, events)
         self.assertEqual(events[-1], {"type": "partial", "text": "set a timer"})
+
+    def test_hud_toggle_reaches_subscribers_and_stats_answer(self):
+        async def go():
+            agent, _ = make_agent([])
+            server, voice, sock = await self._server(agent, FakeTranscriber())
+            reader, writer = await asyncio.open_unix_connection(str(sock))
+            writer.write(b'{"type": "subscribe"}\n{"type": "stats"}\n')
+            await writer.drain()
+            await self._send(sock, {"type": "hud", "action": "show"})
+            events = []
+            while not ({"hud", "stats"} <= {e["type"] for e in events}):
+                events.append(json.loads(await asyncio.wait_for(reader.readline(), 5)))
+            await asyncio.wait_for(server.close(), 2)
+            writer.close()
+            return events
+
+        events = run(go())
+        self.assertIn({"type": "hud", "action": "show"}, events)
+        stats = next(e for e in events if e["type"] == "stats")
+        self.assertIn("cpu_percent", stats)
+        self.assertIn("playing", stats)
+
+    def test_wake_word_questions(self):
+        async def go():
+            agent, _ = make_agent([("Hot.", None), ("Paused.", None)])
+            server, voice, sock = await self._server(agent, FakeTranscriber(
+                "I saw a cobra at the zoo", "Cobra, how hot is my GPU?", "Cobra.",
+                "pause the music"))
+            server.follow_up_seconds = 0.5
+            audio = np.zeros(16000, np.float32)
+            await server._on_phrase(audio)            # not for her
+            self.assertIsNone(server.spoken_task)
+            await server._on_phrase(audio)            # "Cobra, how hot…"
+            await server.spoken_task
+            await server._on_phrase(audio)            # just "Cobra": "Yes?", then waits
+            await asyncio.sleep(0.05)
+            self.assertEqual(voice.speaker.said[-1], "Yes?")
+            self.assertEqual(server.state, "listening")
+            await server._on_phrase(audio)            # the question, without her name
+            await server.spoken_task
+            await server.close()
+            return agent
+
+        agent = run(go())
+        self.assertEqual([m["content"] for m in agent.history if m["role"] == "user"],
+                         ["how hot is my GPU?", "pause the music"])
 
     def test_confirm_is_answered_by_voice(self):
         async def go():

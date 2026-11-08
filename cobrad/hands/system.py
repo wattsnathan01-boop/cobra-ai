@@ -1,6 +1,7 @@
 """System info: CPU, memory, temperatures, battery, GPU."""
 from __future__ import annotations
 
+import asyncio
 import shutil
 
 import psutil
@@ -14,7 +15,8 @@ from . import sh, tool
 async def system_stats() -> dict:
     mem = psutil.virtual_memory()
     stats: dict = {
-        "cpu_percent": psutil.cpu_percent(interval=0.3),
+        # measuring takes 0.3 s; do it off the event loop so audio and the overlay keep flowing
+        "cpu_percent": await asyncio.to_thread(psutil.cpu_percent, 0.3),
         "memory_used_gb": round(mem.used / 2**30, 1),
         "memory_total_gb": round(mem.total / 2**30, 1),
     }

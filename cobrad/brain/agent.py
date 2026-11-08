@@ -57,6 +57,7 @@ class Agent:
                 name, args = call["name"], call["arguments"]
                 await emit({"type": "tool", "name": name, "args": args, "status": "checking"})
                 allowed, reason = await self.gate.check(name, args, confirm)
+                started = time.monotonic()
                 if not allowed:
                     result, ok = f"Not done: {reason}.", False
                 else:
@@ -69,7 +70,8 @@ class Agent:
                         result, ok = f"Error: bad arguments ({e})", False
                     self.gate.log_result(name, ok, result)
                 await emit({"type": "tool", "name": name, "args": args,
-                            "status": "done" if ok else "failed", "result": result})
+                            "status": "done" if ok else "failed", "result": result,
+                            "ms": round((time.monotonic() - started) * 1000)})
                 turn.append(self.brain.tool_message(name, result))
         else:
             await emit({"type": "error", "message": "stopped after too many tool steps"})
