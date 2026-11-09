@@ -184,6 +184,8 @@ Item {
             anchors.centerIn: parent
             size: 236
             ring: root.accent
+            mode: root.mode
+            level: root.level
         }
     }
 }

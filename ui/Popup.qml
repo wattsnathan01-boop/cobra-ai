@@ -105,6 +105,8 @@ PanelWindow {
             id: face
             anchors { left: parent.left; leftMargin: 16; verticalCenter: parent.verticalCenter }
             ring: win.accent
+            mode: win.mode
+            level: win.mode === "listening" ? win.cobra.micLevel : win.cobra.voiceLevel
         }
 
         Column {

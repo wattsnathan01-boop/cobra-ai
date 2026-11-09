@@ -23,7 +23,9 @@ PanelWindow {
 
     WlrLayershell.namespace: "cobra-hud"
     WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: cobra.hudOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    // on demand, not exclusive: it has the keys when it opens or you click it, and clicking a
+    // window on another screen (a terminal, say) takes them back
+    WlrLayershell.keyboardFocus: cobra.hudOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     Connections {
         target: hud.cobra
