@@ -68,8 +68,9 @@ async def sudo_run_preview(command: str) -> dict:
 
 
 @tool("sudo_run",
-      "Run a command as root, for system changes (installing packages, services, files in /etc). "
-      "The person sees the command, must approve it, and then types their password.",
+      "Run a command as root, for system changes (services, files in /etc, updates). To install "
+      "software use packages_install instead. The person sees the command, must approve it, and "
+      "then types their password.",
       properties={"command": {"type": "string",
                               "description": "the command without sudo in front"}},
       required=["command"],

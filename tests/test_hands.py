@@ -3,6 +3,7 @@ import os
 import tempfile
 import tomllib
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from cobrad import hands
@@ -179,6 +180,49 @@ class HyprTests(unittest.TestCase):
             match_app(apps, "kity")
         self.assertIn("kitty", str(e.exception))
         self.assertIn("browser", str(e.exception))
+
+
+class PackageTests(unittest.TestCase):
+    def fake_pacman(self, repo, aur=(), installed=()):
+        from cobrad.hands import packages
+
+        async def fake_c(*cmd, timeout=30):
+            name = cmd[-1]
+            if cmd[:2] == ("pacman", "-Si") and name in repo:
+                return f"Repository      : extra\nName            : {name}\nVersion         : 1.0-1\nDownload Size   : 20.00 KiB\n"
+            if cmd[:3] == ("yay", "-Si", "--aur") and name in aur:
+                return f"Repository      : aur\nName            : {name}\nVersion         : 2.0-1\n"
+            if cmd[:2] == ("pacman", "-Q") and name in installed:
+                return f"{name} 1.0-1\n"
+            raise ToolError("not found")
+        return mock.patch.object(packages, "_c", fake_c)
+
+    def test_preview_lists_what_will_be_installed(self):
+        from cobrad.hands import packages
+        with self.fake_pacman({"cowsay", "htop"}, installed={"htop"}):
+            p = run(packages.packages_install_preview(["cowsay", "htop"]))
+        self.assertEqual([(x["name"], bool(x["installed"])) for x in p["packages"]],
+                         [("cowsay", False), ("htop", True)])
+        self.assertEqual(p["command"], "pacman -S --needed cowsay")
+        self.assertNotIn("AUR", p["tags"])
+
+    def test_aur_packages_are_flagged(self):
+        from cobrad.hands import packages
+        with self.fake_pacman(set(), aur={"some-app-bin"}), mock.patch.object(packages.shutil, "which", return_value="/usr/bin/yay"):
+            p = run(packages.packages_install_preview(["some-app-bin"]))
+        self.assertIn("AUR", p["tags"])
+        self.assertTrue(p["warning"])
+
+    def test_refuses_unknown_installed_and_odd_names(self):
+        from cobrad.hands import packages
+        with self.fake_pacman({"htop"}, installed={"htop"}), mock.patch.object(packages.shutil, "which", return_value=None):
+            for bad in (["htop"], ["nope"], ["rm -rf /"], []):
+                with self.assertRaises(ToolError):
+                    run(packages.packages_install_preview(bad))
+
+    def test_installs_never_get_always(self):
+        from cobrad.gate import NO_ALWAYS
+        self.assertIn("packages_install", NO_ALWAYS)
 
 
 class RegistryTests(unittest.TestCase):

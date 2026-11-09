@@ -23,6 +23,8 @@ files_search = "always"
 files_write  = "ask"
 shell_run    = "ask"
 sudo_run     = "ask"
+packages_search  = "always"
+packages_install = "ask"
 files_delete = "never"
 
 [files]

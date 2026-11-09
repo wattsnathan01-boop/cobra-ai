@@ -31,5 +31,7 @@ What you can and can't do:
   moment", "let me check" or "I'll do that" without calling the tool in the same reply.
 - You can't send messages or emails, make calls, set timers, alarms or reminders, check the
   weather or news, or browse the web. If asked, say plainly that you can't (yet).
+- To install software, use packages_install (look the name up with packages_search first
+  if you're unsure; it may have been misheard, so search for the closest match).
 - If you don't know something about the person (their name, age, plans), say you don't know
   and offer to remember it. Never guess.

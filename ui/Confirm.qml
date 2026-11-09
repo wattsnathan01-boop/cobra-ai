@@ -60,6 +60,7 @@ PanelWindow {
         if (kind === "command") return preview.root ? "Cobra wants to run a command as root"
                                                     : "Cobra wants to run a command"
         if (kind === "edit") return "Cobra wants to edit a file"
+        if (kind === "packages") return "Cobra wants to install software"
         if (kind === "create") return "Cobra wants to create a file"
         if (kind === "delete") return "Cobra wants to move a file to the trash"
         return "Cobra wants to use " + (card ? card.tool.replace(/_/g, " ") : "")
@@ -241,6 +242,64 @@ PanelWindow {
                 }
             }
 
+            // software to install
+            Rectangle {
+                visible: win.kind === "packages"
+                width: parent.width
+                height: pkgs.implicitHeight + 8
+                radius: 10
+                color: Qt.rgba(0, 0, 0, 0.35)
+                border.color: Qt.alpha(win.theme.text, 0.1)
+                Column {
+                    id: pkgs
+                    width: parent.width
+                    topPadding: 4
+                    Repeater {
+                        model: win.kind === "packages" ? win.preview.packages : []
+                        Item {
+                            required property var modelData
+                            width: pkgs.width
+                            height: 32
+                            opacity: modelData.installed ? 0.45 : 1
+                            Text {
+                                anchors { left: parent.left; leftMargin: 16; verticalCenter: parent.verticalCenter }
+                                text: modelData.name + "  <font color='" + win.theme.muted + "'>"
+                                      + modelData.version + "</font>"
+                                textFormat: Text.StyledText
+                                color: win.theme.text
+                                font { family: win.theme.mono; pixelSize: 13 }
+                            }
+                            Text {
+                                anchors { right: parent.right; rightMargin: 16; verticalCenter: parent.verticalCenter }
+                                text: modelData.installed ? "already installed"
+                                      : (modelData.source === "aur" ? "AUR" : modelData.source)
+                                        + (modelData.size ? "  \u00b7  " + modelData.size : "")
+                                color: modelData.source === "aur" && !modelData.installed
+                                       ? win.theme.crimson : win.theme.muted
+                                font { family: win.theme.mono; pixelSize: 11 }
+                            }
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                visible: win.kind === "packages" && !!win.preview.warning
+                width: parent.width
+                height: warn.implicitHeight + 24
+                radius: 10
+                color: Qt.alpha(win.theme.crimson, 0.07)
+                border.color: Qt.alpha(win.theme.crimson, 0.3)
+                Text {
+                    id: warn
+                    anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
+                              margins: 14 }
+                    text: win.preview.warning || ""
+                    color: win.theme.text
+                    wrapMode: Text.Wrap
+                    font { family: win.theme.mono; pixelSize: 11 }
+                }
+            }
+
             // anything else: just the arguments
             Text {
                 visible: win.kind === "other" || win.kind === "delete"
@@ -314,7 +373,8 @@ PanelWindow {
                 Button {
                     width: parent.width - 10 * (parent.always ? 2 : 1) - deny.width
                            - (parent.always ? alwaysButton.width : 0)
-                    label: win.kind === "edit" || win.kind === "create" ? "Apply" : "Allow once"
+                    label: win.kind === "edit" || win.kind === "create" ? "Apply"
+                         : win.kind === "packages" ? "Install" : "Allow once"
                     key: "Y"
                     tint: win.theme.mint
                     filled: true

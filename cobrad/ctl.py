@@ -78,6 +78,13 @@ def _show_preview(ev: dict) -> None:
         for d in p.get("diff", []):
             colour = {"+": MINT, "-": CRIMSON}.get(d["op"], MUTED)
             print(f"{colour}    {d['op'] if d['op'] in '+-' else ' '} {d['text']}{RESET}")
+    elif p.get("kind") == "packages":
+        for pkg in p["packages"]:
+            note = "already installed" if pkg["installed"] else \
+                f"{'AUR' if pkg['source'] == 'aur' else pkg['source']} {pkg['size']}".strip()
+            print(f"{MUTED}    {pkg['name']} {pkg['version']}  ({note}){RESET}")
+        if p.get("warning"):
+            print(f"{CRIMSON}    {p['warning']}{RESET}")
     else:
         print(f"{MUTED}    {json.dumps(ev['args'])}{RESET}")
 

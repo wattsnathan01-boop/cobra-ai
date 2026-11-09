@@ -35,6 +35,8 @@ Column {
           tools: ["shell_run"], noAlways: true },
         { icon: 0xF0565, title: "sudo & system changes", sub: "Packages, services, /etc · always asks",
           tools: ["sudo_run"], noAlways: true },
+        { icon: 0xF03D3, title: "Install software", sub: "pacman and the AUR \u00b7 always asks, then your password",
+          tools: ["packages_install"], noAlways: true },
         { icon: 0xF0A7A, title: "Delete files", sub: "To the trash, even inside allowed folders",
           tools: ["files_delete"] },
         { icon: 0xF0306, title: "Passwords & keyring", sub: "No tool can reach them",

@@ -17,7 +17,7 @@ Confirm = Callable[[str, dict, dict | None], Awaitable[bool]]
 
 LEVELS = ("always", "ask", "never")
 # never offered "Always": a standing yes to any command is too broad
-NO_ALWAYS = {"shell_run", "sudo_run"}
+NO_ALWAYS = {"shell_run", "sudo_run", "packages_install"}
 
 
 class Gate:

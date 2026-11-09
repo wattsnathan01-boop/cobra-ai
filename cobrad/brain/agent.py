@@ -21,6 +21,17 @@ _CLAIM = re.compile(
     r"|i(?:'ve| have) (?:remembered|saved|set|opened|sent|launched|closed|turned|changed|"
     r"checked|noted|started|stopped|increased|decreased|muted|paused)"
     r"|one moment|just a moment|let me (?:check|look|see|find))\b", re.IGNORECASE)
+# She copies her own earlier replies, including refusals from before she gained a tool.
+ABILITIES_NOTE = ("Your tools are listed with this message and they're what you can do right "
+                  "now. Earlier replies in this conversation may be out of date about what you "
+                  "can and can't do: if a tool fits the request, use it.")
+# Refusing without having tried a tool: often a copy of an old reply from before she could.
+_REFUSAL = re.compile(r"\b(i (?:cannot|can't|can not|am unable to|am not able to)|i'm (?:unable|"
+                      r"not able) to|i don't have (?:the ability|a way|access))\b", re.IGNORECASE)
+REFUSAL_NUDGE = ("You said you can't, but you haven't tried any tool, and earlier replies may be "
+                 "out of date. Check your tools: if one fits (packages_install for installing "
+                 "software, shell_run for commands, files_* for files), call it now. If none "
+                 "fits, tell the person plainly that you can't.")
 NUDGE = ("You just said you'd do, or did, something, but you didn't call a tool, so nothing "
          "happened. If one of your tools can do it, call it now. If not, tell the person plainly "
          "that you can't do it.")
@@ -51,20 +62,23 @@ class Agent:
         extra = self.context() if self.context else ""
         remembered = self.memory.prompt() if self.memory else ""
         return {"role": "system",
-                "content": f"{self.persona}\n\nCurrent local time: {now}.{extra}{remembered}"}
+                "content": f"{self.persona}\n\nCurrent local time: {now}.{extra}{remembered}"
+                           f"\n\n{ABILITIES_NOTE}"}
 
     async def ask(self, text: str, emit: Emit, confirm: Confirm | None) -> str:
         turn = [{"role": "user", "content": text}]
         tools = hands.schemas()
         reply = ""
         used_tools = False
-        nudged_at: int | None = None  # where in `turn` an empty claim was caught
+        nudged_at: int | None = None  # where in `turn` an empty claim or refusal was caught
+        nudge_len = 0                 # how many entries the catch added there
+        history = self.history
 
         for _ in range(self.max_steps):
             reply, calls = "", []
             await emit({"type": "state", "state": "thinking"})
             try:
-                async for ev in self.brain.chat([self._system(), *self.history, *turn], tools):
+                async for ev in self.brain.chat([self._system(), *history, *turn], tools):
                     if ev["type"] == "text":
                         if not reply:
                             await emit({"type": "state", "state": "speaking"})
@@ -77,12 +91,23 @@ class Agent:
                 return ""
 
             turn.append(self.brain.assistant_message(reply, calls))
-            if not calls and not used_tools and nudged_at is None and _CLAIM.search(reply):
-                log.info("caught a claim with no tool behind it: %r", reply[:120])
-                nudged_at = len(turn) - 1
-                turn.append({"role": "system", "content": NUDGE})
-                await emit({"type": "delta", "text": " "})
-                continue
+            if not calls and not used_tools and nudged_at is None:
+                nudge = NUDGE if _CLAIM.search(reply) else \
+                    REFUSAL_NUDGE if _REFUSAL.search(reply) else None
+                if nudge:
+                    log.info("checking a reply with no tool behind it: %r", reply[:120])
+                    nudged_at = len(turn) - 1
+                    if nudge is REFUSAL_NUDGE:
+                        # she copies earlier replies (old refusals, or whatever answer came
+                        # last), so the retry sees only this request and the note
+                        history = []
+                        turn[-1] = {"role": "system", "content": nudge}
+                        nudge_len = 1
+                    else:
+                        turn.append({"role": "system", "content": nudge})
+                        nudge_len = 2
+                    await emit({"type": "delta", "text": " "})
+                    continue
             if not calls:
                 break
             used_tools = True
@@ -119,7 +144,7 @@ class Agent:
 
         if nudged_at is not None:
             # don't keep the empty claim: she copies her own earlier replies
-            del turn[nudged_at:nudged_at + 2]
+            del turn[nudged_at:nudged_at + nudge_len]
         self.history.extend(turn)
         if self.memory:
             self.memory.record(turn)

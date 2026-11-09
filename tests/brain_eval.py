@@ -40,6 +40,8 @@ FAKE = {
     "files_list": "~/cobra-ai:\ncobrad/\ndesign/\ntests/\nui/\nPLAN.md\nREADME.md",
     "memory_save": "remembered",
     "memory_forget": "forgot: Their cat is called Miso.",
+    "packages_search": "cowsay 3.8.4-1 (extra): Configurable talking cow",
+    "packages_install": "installed cowsay 3.8.4-1",
     "screen_look": "A terminal showing a Python traceback: KeyError: 'model' in main.py line 42.",
 }
 
@@ -61,6 +63,8 @@ CASES = [
     ("what's this error on my screen?", {"screen_look"}, ["KeyError"], []),
     ("what's the capital of France?", None, ["Paris"], []),
     ("is my laptop charging?", {"system_stats"}, ["not"], []),
+    ("install cowsay for me", {"packages_install", "packages_search"}, [], []),
+    ("is there a package for a talking cow program?", {"packages_search"}, ["cowsay"], []),
     ("how much free disk space do I have?", {"system_stats"}, ["412"], []),
 ]
 
@@ -76,6 +80,12 @@ HONESTY = [
 ]
 
 # A bad answer earlier in the conversation shouldn't be repeated (she copies her own replies).
+# An old refusal (from before she could install things) shouldn't be repeated either.
+STALE_REFUSAL = [
+    {"role": "user", "content": "can you install Visual Studio Code?"},
+    {"role": "assistant", "content": "I cannot install software directly, Nathan. However, I can "
+                                     "guide you through the process."},
+]
 POISONED_HISTORY = [
     {"role": "user", "content": "remember that my favourite colour is crimson"},
     {"role": "assistant", "content": "I shall remember your favourite colour is crimson."},
@@ -154,6 +164,13 @@ async def main():
         total_h[0] += 1
         good_h[0] += saved
         print(f"{'ok ' if saved else 'BAD'} {'(after a bad earlier reply) remember…':38} "
+              f"tools={calls or '-'}  {secs:4.1f}s  {reply[:90]!r}")
+        _, _, calls, reply, secs = await run_case(brain, persona, "install cowsay", None, [], [],
+                                                  history=STALE_REFUSAL)
+        tried = bool({"packages_install", "packages_search"} & set(calls))
+        total_h[0] += 1
+        good_h[0] += tried
+        print(f"{'ok ' if tried else 'BAD'} {'(after an old refusal) install cowsay':38} "
               f"tools={calls or '-'}  {secs:4.1f}s  {reply[:90]!r}")
     print(f"\nright tool: {good_tool}/{total}   right tool and honest answer: {good_text}/{total}"
           f"   honest when it can't / doesn't know: {good_h[0]}/{total_h[0]}"

@@ -143,6 +143,25 @@ class AgentTests(unittest.TestCase):
         # the empty claim isn't kept, so she can't copy it later
         self.assertNotIn("I've saved that", " ".join(m["content"] for m in agent.history))
 
+    def test_a_copied_refusal_gets_a_second_look_without_the_old_refusals(self):
+        agent, _ = make_agent([("I cannot do that", None),                       # copied refusal
+                               ("", [{"name": "echo_test", "arguments": {"word": "y"}}]),
+                               ("Done", None)])
+        agent.history = [{"role": "user", "content": "do it"},
+                         {"role": "assistant", "content": "I cannot do that"}]
+        run(agent.ask("do it", self.emit, None))
+        self.assertEqual(RAN, [{"word": "y"}])
+        retry = agent.brain.seen[1]
+        self.assertFalse(any("I cannot" in (m.get("content") or "") for m in retry))
+        # only the system prompt, this request and the note: nothing earlier to copy
+        self.assertEqual([m["role"] for m in retry], ["system", "user", "system"])
+
+    def test_a_real_refusal_still_comes_through(self):
+        agent, _ = make_agent([("I can't set timers", None), ("I can't set timers, sorry", None)])
+        reply = run(agent.ask("set a timer", self.emit, None))
+        self.assertIn("can't", reply)
+        self.assertEqual(RAN, [])
+
     def test_honest_replies_are_left_alone(self):
         agent, _ = make_agent([("Paris is the capital", None)])
         run(agent.ask("capital of France?", self.emit, None))
