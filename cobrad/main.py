@@ -116,7 +116,7 @@ async def amain() -> None:
     if key := claude_key():
         from .brain.claude import ClaudeBrain
         claude = ClaudeBrain(key, cfg["claude"]["model"], cfg["claude"]["effort"],
-                             on_usage=memory.record_usage)
+                             on_usage=memory.record_usage, web=cfg["claude"].get("web", True))
         log.info("Claude is set up (%s); brain mode %s", cfg["claude"]["model"],
                  cfg["brain"]["mode"])
     else:

@@ -126,6 +126,13 @@ API key; a claude.ai Pro/Max subscription doesn't include API access.
 Your screen is always read by the local vision model, even when Claude answers. Settings →
 Brains shows this month's spend.
 
+## Web search
+
+When Claude answers she can search the web and read pages (Anthropic's server-side tools),
+so news, weather, prices and opening times work; in Auto mode those questions go to Claude.
+It costs $10 per 1,000 searches (about 1p each) plus the tokens to read the results. Turn it
+off with `web = false` under `[claude]` in `config.toml`. The local brain can't search.
+
 ## Screen
 
 "Cobra, what's this error?" or "what does the terminal on the left say?": she takes a
@@ -151,6 +158,31 @@ restart Cobra:
 {"mcpServers": {"pencil": {"command": "/home/you/.pencil/mcp/code_-_oss/out/mcp-server-linux-x64",
                            "args": ["--app", "code_-_oss", "--agent", "cobra"]}}}
 ```
+
+### Chrome
+
+Cobra can drive her own Chrome window: open sites, read pages, click and fill things in. It's a
+separate profile in `~/.local/share/cobra/chrome-profile`, not signed in to your accounts, and
+she won't type passwords or card details. It needs Node.js (`sudo pacman -S nodejs npm`) and
+this in `mcp.json` (Google's usage statistics off, no running scripts in pages):
+
+```json
+"chrome": {"command": "/usr/bin/npx",
+           "args": ["-y", "chrome-devtools-mcp@1.12.0",
+                    "--userDataDir", "/home/you/.local/share/cobra/chrome-profile",
+                    "--usageStatistics=false", "--performanceCrux=false",
+                    "--categoryPerformance=false", "--categoryEmulation=false",
+                    "--categoryMemory=false", "--javascriptEvaluation=false",
+                    "--fileNavigations=false", "--screenshotFormat", "jpeg",
+                    "--screenshotMaxWidth", "1280"],
+           "env": {"CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": "1"}}
+```
+
+To let her open and read pages without asking (clicking, typing and uploads still ask), add to
+`~/.config/cobra/permissions.toml` under `[tools]`: `chrome__new_page`,
+`chrome__navigate_page`, `chrome__select_page`, `chrome__list_pages`, `chrome__close_page`,
+`chrome__take_snapshot`, `chrome__take_screenshot`, `chrome__wait_for` and `chrome__hover`
+`= "always"`.
 
 Each app's tools appear as `<app>__<tool>` and go through the permission gate: tools the app
 marks read-only run straight away, anything that changes things asks first (Settings →

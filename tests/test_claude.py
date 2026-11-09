@@ -105,7 +105,64 @@ class FakeClient:
         self.beta = NS(messages=NS(stream=stream))
 
 
+class PausingClient:
+    """Answers with each final message in turn (for pause_turn)."""
+    def __init__(self, finals):
+        self.sent = []
+        outer = self
+
+        def stream(**kwargs):
+            outer.sent.append(kwargs)
+            return FakeStream([], finals[len(outer.sent) - 1])
+        self.beta = NS(messages=NS(stream=stream))
+
+
+def usage(searches=0):
+    return NS(input_tokens=0, output_tokens=0, cache_read_input_tokens=0,
+              cache_creation_input_tokens=0, server_tool_use=NS(web_search_requests=searches))
+
+
 class ClaudeBrainTests(unittest.TestCase):
+    def test_web_search_pauses_and_costs(self):
+        import asyncio
+        search = [Block(type="server_tool_use", id="s1", name="web_search", input={"query": "q"}),
+                  Block(type="web_search_tool_result", tool_use_id="s1", content=[])]
+        client = PausingClient([
+            NS(model="claude-opus-5-5", stop_reason="pause_turn", usage=usage(2), content=search),
+            NS(model="claude-opus-5-5", stop_reason="end_turn", usage=usage(1),
+               content=[Block(type="text", text="Sunny.")]),
+        ])
+        spent = []
+        brain = ClaudeBrain("k", client=client, on_usage=lambda m, c: spent.append(c))
+
+        async def go():
+            return [ev async for ev in brain.chat([{"role": "user", "content": "weather?"}], [])]
+        self.assertEqual(asyncio.run(go()), [])  # (the text arrives as stream events)
+        tools = [t["type"] for t in client.sent[0]["tools"] if "type" in t]
+        self.assertEqual(tools, ["web_search_20260209", "web_fetch_20260209"])
+        self.assertEqual(client.sent[1]["messages"][-1]["role"], "assistant")  # carried on
+        self.assertEqual([round(c, 4) for c in spent], [0.02, 0.01])
+        blocks = brain.assistant_message("Sunny.", [])["claude_blocks"]
+        self.assertEqual([b["type"] for b in blocks],
+                         ["server_tool_use", "web_search_tool_result", "text"])
+        # a later question doesn't resend the search results
+        _, msgs = to_messages([{"role": "user", "content": "weather?"},
+                               {"role": "assistant", "content": "Sunny.", "claude_blocks": blocks},
+                               {"role": "user", "content": "thanks"}], "")
+        self.assertEqual([b["type"] for b in msgs[1]["content"]], ["text", "text"])
+        self.assertIn('searched "q" on the web', msgs[1]["content"][0]["text"])
+
+    def test_web_can_be_turned_off(self):
+        import asyncio
+        client = PausingClient([NS(model="claude-opus-5-5", stop_reason="end_turn",
+                                   usage=usage(), content=[])])
+        brain = ClaudeBrain("k", client=client, web=False)
+
+        async def go():
+            return [ev async for ev in brain.chat([{"role": "user", "content": "x"}], [])]
+        asyncio.run(go())
+        self.assertEqual(client.sent[0]["tools"], [])
+
     def test_request_and_reply(self):
         import asyncio
         final = NS(model="claude-opus-5-5", stop_reason="tool_use",
@@ -168,6 +225,10 @@ class RoutingTests(unittest.TestCase):
             "remind me to sign Sky up at the vets": "claude",
             "add to my diary that today was good": "claude",
             "open my notebook": "local",
+            "what's the weather in Leeds tomorrow?": "claude",
+            "search for cheap flights to Spain": "claude",
+            "what's the latest news?": "claude",
+            "go to the vets website in your browser and find their phone number": "claude",
         }
         for text, want in cases.items():
             self.assertEqual(choose(text, "auto", True), want, text)

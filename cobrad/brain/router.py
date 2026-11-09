@@ -5,7 +5,8 @@ Modes: "local" and "claude" always use that brain; "auto" decides per question, 
   1. "ask Claude" / "use local" in the question wins.
   2. Claude not set up or unreachable: local.
   3. Quick things (media, volume, system info, windows, apps, memory, small talk): local.
-  4. Coding, files, explanations, writing, longer questions: Claude.
+  4. Coding, files, explanations, writing, the web (search, news, weather, prices), longer
+     questions: Claude, which has web search.
 Screenshots are read by the local vision model either way, so the screen never leaves the
 laptop.
 """
@@ -29,7 +30,10 @@ _HEAVY = re.compile(
     r"difference|compare|plan|write|draft|essay|email|letter|summar\w*|translate|file|files|"
     r"config|configure|folder|edit|fix|terminal|command|shell|research|recommend|ideas?|"
     r"design|mock-?up|wireframe|layout|canvas|pencil|landing page|ui|"
-    r"remind\w*|diary|jot|note (that|this|it|down))\b",
+    r"remind\w*|diary|jot|note (that|this|it|down)|"
+    r"search|look up|look it up|google|news|latest|weather|forecast|price|prices|cost|"
+    r"web|website|online|internet|open(ing)? (hours|times)|score|results?|"
+    r"site|web ?page|tab|your browser|fill in|form|sign up|log ?in)\b",
     re.IGNORECASE)
 _QUICK = re.compile(
     r"\b(volume|mute|unmute|louder|quieter|play|pause|resume|skip|next|previous|song|music|"
