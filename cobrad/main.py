@@ -97,6 +97,8 @@ async def amain() -> None:
     from . import screen
     from .hands import files
     files.configure(load_allowed_folders())
+    from .hands import mcp
+    await mcp.start_all(config_dir() / "mcp.json")  # tools from other apps (Pencil, …)
     screen.SETTINGS.update(host=cfg["local"]["host"], model=cfg["local"]["vision_model"],
                            hide=cfg["screen"]["hide"], max_side=cfg["screen"]["max_side"])
     local = cfg["local"]
@@ -146,6 +148,7 @@ async def amain() -> None:
     await stop.wait()
     if ears:
         ears.cancel()
+    await mcp.stop_all()
     await server.close()
     log.info("bye")
 

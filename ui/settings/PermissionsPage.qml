@@ -118,6 +118,46 @@ Column {
         }
     }
 
+    // tools from connected apps (MCP servers like Pencil): one row each
+    readonly property var grouped: groups.reduce((all, g) => all.concat(g.tools), [])
+    readonly property var others: p ? p.tools.filter(t => grouped.indexOf(t.name) < 0) : []
+
+    Card {
+        visible: page.others.length > 0
+        width: parent.width
+        icon: 0xF0431  // power-plug
+        title: "Connected apps"
+        status: page.others.length + " tools"
+        tint: page.theme.violet
+        Text {
+            width: parent.width
+            text: "Tools from apps listed in ~/.config/cobra/mcp.json. Ones the app marks as "
+                  + "read-only start as Always; anything that changes things asks first."
+            color: page.theme.muted
+            wrapMode: Text.Wrap
+            font { family: page.theme.mono; pixelSize: 11 }
+        }
+        Repeater {
+            model: page.others
+            Item {
+                required property var modelData
+                width: parent.width
+                height: 44
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.name.replace("__", " \u203a ")
+                    color: page.theme.text
+                    font { family: page.theme.mono; pixelSize: 12 }
+                }
+                Segment {
+                    anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                    value: modelData.level
+                    onPicked: lvl => page.cobra.set("permission." + modelData.name, lvl)
+                }
+            }
+        }
+    }
+
     Card {
         width: parent.width
         icon: 0xF0209  // eye-off

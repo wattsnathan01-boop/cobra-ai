@@ -225,6 +225,49 @@ class PackageTests(unittest.TestCase):
         self.assertIn("packages_install", NO_ALWAYS)
 
 
+class McpTests(unittest.TestCase):
+    def test_config_formats(self):
+        import json
+        from cobrad.hands import mcp
+        tmp = Path(tempfile.mkdtemp())
+        server = {"command": "/bin/x", "args": ["--app", "y"], "env": {}}
+        for data in ({"mcpServers": {"pencil": server}},
+                     {"name": "pencil", "transport": "stdio", **server},
+                     [{"name": "pencil", **server}]):
+            (tmp / "mcp.json").write_text(json.dumps(data))
+            self.assertEqual(mcp.load_config(tmp / "mcp.json"),
+                             {"pencil": {"command": "/bin/x", "args": ["--app", "y"], "env": {}}})
+        self.assertEqual(mcp.load_config(tmp / "missing.json"), {})
+
+    def test_tools_are_registered_with_safe_names_and_permissions(self):
+        from types import SimpleNamespace as NS
+        from cobrad.hands import mcp
+        srv = mcp.Server("pencil", {"command": "x", "args": [], "env": {}})
+        srv._register([NS(name="get_app_state", description="state", input_schema=None,
+                          annotations=NS(read_only_hint=True)),
+                       NS(name="execute", description="edit", input_schema={"type": "object"},
+                          annotations=None)])
+        self.assertEqual(hands.TOOLS["pencil__get_app_state"].permission, "always")
+        self.assertEqual(hands.TOOLS["pencil__execute"].permission, "ask")
+        self.assertTrue(hands.TOOLS["pencil__execute"].description.startswith("[pencil]"))
+        self.assertEqual(mcp.tool_name("my app", "do.thing"), "my_app__do_thing")
+        for name in ("pencil__get_app_state", "pencil__execute"):
+            del hands.TOOLS[name]
+
+    def test_results_become_text_and_errors_raise(self):
+        from types import SimpleNamespace as NS
+        from cobrad.hands import mcp
+        srv = mcp.Server("p", {"command": "x", "args": [], "env": {}})
+
+        class Session:
+            async def call_tool(self, name, args):
+                return NS(content=[NS(type="text", text=f"{name} {args}")], is_error=name == "bad")
+        srv.session = Session()
+        self.assertEqual(run(srv._caller("ok")(a=1)), "ok {'a': 1}")
+        with self.assertRaises(ToolError):
+            run(srv._caller("bad")())
+
+
 class RegistryTests(unittest.TestCase):
     def test_new_tools_have_defaults(self):
         hands.load_all()

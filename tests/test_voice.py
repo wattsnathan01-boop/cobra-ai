@@ -176,7 +176,10 @@ class SpeakerTests(unittest.TestCase):
         sp = Speaker(FakeTTS(), output=out)
         sp.say("x" * 50)  # ~15 s of audio at this pace
         sp.say("more")
-        time.sleep(0.1)
+        for _ in range(200):  # wait until it's actually playing
+            if out.written:
+                break
+            time.sleep(0.01)
         sp.stop()
         run(asyncio.wait_for(sp.wait(), 5))
         self.assertTrue(out.aborted)

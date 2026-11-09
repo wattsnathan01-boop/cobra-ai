@@ -27,7 +27,8 @@ _HEAVY = re.compile(
     r"\b(code|coding|script|program|function|class|bug|debug|error|traceback|exception|"
     r"compile|regex|refactor|explain|why|how (do|does|can|would|should)|what('s| is) the "
     r"difference|compare|plan|write|draft|essay|email|letter|summar\w*|translate|file|files|"
-    r"config|configure|folder|edit|fix|terminal|command|shell|research|recommend|ideas?)\b",
+    r"config|configure|folder|edit|fix|terminal|command|shell|research|recommend|ideas?|"
+    r"design|mock-?up|wireframe|layout|canvas|pencil|landing page|ui)\b",
     re.IGNORECASE)
 _QUICK = re.compile(
     r"\b(volume|mute|unmute|louder|quieter|play|pause|resume|skip|next|previous|song|music|"

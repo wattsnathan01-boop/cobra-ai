@@ -141,6 +141,21 @@ you say "stop watching" or click the pill.
   can see your screen" pill, and an eye badge in waybar.
 - **Pointing is roughly right**, good for "this line" or "that button", not tiny targets.
 
+## Other apps (MCP)
+
+Cobra can use tools from other apps through MCP servers, such as [Pencil](https://pencil.dev)'s
+design canvas. List them in `~/.config/cobra/mcp.json` (the usual `mcpServers` format) and
+restart Cobra:
+
+```json
+{"mcpServers": {"pencil": {"command": "/home/you/.pencil/mcp/code_-_oss/out/mcp-server-linux-x64",
+                           "args": ["--app", "code_-_oss", "--agent", "cobra"]}}}
+```
+
+Each app's tools appear as `<app>__<tool>` and go through the permission gate: tools the app
+marks read-only run straight away, anything that changes things asks first (Settings →
+Permissions → Connected apps). If the app isn't open she says so, and reconnects when it is.
+
 ## Memory
 
 "Cobra, remember that I take my coffee black" saves it to `~/.config/cobra/memory.md` (a plain
