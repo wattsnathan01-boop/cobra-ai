@@ -13,9 +13,18 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
-# strict mode: Whisper's own "that wasn't speech" score, and how unsure it was of the words
-NO_SPEECH_MAX = 0.5
+# strict mode drops a segment when Whisper thinks it wasn't speech AND wasn't sure of the
+# words (its own silence rule), or when it's all but certain it wasn't speech. Stricter than
+# this and quiet speech gets dropped too, so you have to raise your voice for her.
+NO_SPEECH = 0.6
 MIN_LOGPROB = -1.0
+SURELY_NOT_SPEECH = 0.9
+
+
+def _is_speech(s) -> bool:
+    if s.no_speech_prob > SURELY_NOT_SPEECH:
+        return False
+    return not (s.no_speech_prob > NO_SPEECH and s.avg_logprob < MIN_LOGPROB)
 
 
 def _preload_cuda12() -> None:
@@ -81,6 +90,11 @@ class Transcriber:
             segments, _ = self.model.transcribe(audio, language="en", beam_size=beam,
                                                 vad_filter=vad, condition_on_previous_text=False,
                                                 initial_prompt=prompt)
-            return " ".join(s.text.strip() for s in segments
-                            if not strict or (s.no_speech_prob < NO_SPEECH_MAX
-                                              and s.avg_logprob > MIN_LOGPROB)).strip()
+            kept = []
+            for seg in segments:
+                if not strict or _is_speech(seg):
+                    kept.append(seg.text.strip())
+                else:  # scores only: what was (maybe) said isn't logged
+                    log.info("dropped unsure speech (no_speech %.2f, logprob %.2f)",
+                             seg.no_speech_prob, seg.avg_logprob)
+            return " ".join(kept).strip()
