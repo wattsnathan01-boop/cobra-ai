@@ -104,5 +104,5 @@ async def sh(*cmd: str, timeout: float = 10) -> str:
 
 
 def load_all() -> None:
-    from . import (apps, files, hypr, media, memory, packages, shell,  # noqa: F401
-                   system)  # (importing registers their tools)
+    from . import (apps, brain, files, hypr, media, memory, notebook,  # noqa: F401
+                   packages, shell, system)  # (importing registers their tools)

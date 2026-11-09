@@ -14,6 +14,8 @@ Client → cobrad:
   {"type": "open_settings", "page"?}       ask the overlay to open the settings window
   {"type": "screen", "action"}             watching mode: watch | stop
   {"type": "confirm_reply", "confirm_id", "allow", "remember"?}   remember: "Always"
+  {"type": "notebook", "action", ...}      the notebook window (see notebook/service.py)
+  {"type": "notebook_open", "id"?, "page"?}  open the notebook window (at a note or page)
   {"type": "subscribe"}                    receive every event (overlay, waybar); answered
                                            with hello {model, voice, stt} and the state
   {"type": "status"} / {"type": "reset"}
@@ -31,6 +33,7 @@ cobrad → client:
   screen {state: off|looking|watching, monitor?, windows?}  (also in hello) ·
   point {monitor, x, y, w, h, note}  (highlight a spot on screen, layout coordinates)
   level {source: mic|voice, value 0..1}  (subscribers only, ~30×/s)
+  notebook {...} · notebook_changed · notebook_open · reminder {...} · recording {...}
   error {message} · done {text} · status {state}
 """
 from __future__ import annotations
@@ -66,8 +69,17 @@ _WAKE = re.compile(r"^\W*(?:(?:hey|hi|ok|okay|oi)\W+)?(?:cobra|kobra|copra)s?\b\
                    re.IGNORECASE | re.DOTALL)
 
 # for phrases from the always-on mic: hinting her name (with a wider beam search) turns
-# mumbled starts like "bro what is the time" into "Cobra, what is the time?"
-WAKE_PROMPT = "Cobra, what's my GPU temperature? Cobra."
+# mumbled starts like "bro what is the time" into "Cobra, what is the time?". Keep it to her
+# name: on music or noise Whisper sometimes repeats the prompt back, and a question in it
+# (it used to be "Cobra, what's my GPU temperature?") then gets asked out of nowhere.
+WAKE_PROMPT = "Cobra."
+
+
+def is_prompt_echo(text: str, prompt: str = WAKE_PROMPT) -> bool:
+    """Whisper repeating its prompt back ("Cobra, cobra, cobra."), not something that was said."""
+    words = lambda t: re.findall(r"[a-z']+", t.lower())  # noqa: E731
+    said = words(text)
+    return len(said) > 1 and (said == words(prompt)[:len(said)] or said == ["cobra"] * len(said))
 
 _YES = re.compile(r"\b(yes|yeah|yep|yup|sure|ok|okay|go ahead|do it|allow|affirmative)\b")
 _NO = re.compile(r"\b(no|nope|nah|don't|do not|stop|cancel|deny)\b")
@@ -123,6 +135,7 @@ class Server:
         self.awake_until = 0.0           # after "Cobra" on its own: listening without the name
         self.screen: dict = {"type": "screen", "state": "off"}
         self._bg: set[asyncio.Task] = set()
+        self.notebook = None             # notebook.service.Service
         self._loop: asyncio.AbstractEventLoop | None = None
 
     async def start(self) -> None:
@@ -194,6 +207,11 @@ class Server:
                                          "state": "watching" if screen.watching else "off"})
                 if writer not in self.subscribers:
                     await self._send(writer, self.screen)
+            elif kind == "notebook" and self.notebook is not None:
+                self._spawn(self.notebook.handle(msg, writer))
+            elif kind == "notebook_open":
+                await self._broadcast({"type": "notebook_open", "id": msg.get("id", ""),
+                                       "page": msg.get("page", "")})
             elif kind == "open_settings":
                 await self._broadcast({"type": "open_settings", "page": msg.get("page", "")})
             elif kind == "wake":
@@ -453,8 +471,8 @@ class Server:
         awake = time.monotonic() < self.awake_until
         hint = not awake and not self.pending
         text = await asyncio.to_thread(voice.transcriber.transcribe, audio,
-                                       WAKE_PROMPT if hint else None, 5 if hint else 1)
-        if not _WORDS.search(text):
+                                       WAKE_PROMPT if hint else None, 5 if hint else 1, True)
+        if not _WORDS.search(text) or (hint and is_prompt_echo(text)):
             return
         if self.pending:  # waiting on yes/no: only a clear answer counts, not room chatter
             lowered = text.lower()

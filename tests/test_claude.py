@@ -2,7 +2,9 @@ import unittest
 from types import SimpleNamespace as NS
 
 from cobrad.brain.claude import ClaudeBrain, to_messages, to_tools
-from cobrad.brain.router import choose, strip_choice
+from cobrad.brain.router import Router, choose, strip_choice
+
+from test_core import run
 
 THINK = {"type": "thinking", "thinking": "", "signature": "sig"}
 
@@ -163,9 +165,40 @@ class RoutingTests(unittest.TestCase):
             "use local, what's the capital of France?": "local",
             "what's the capital of France?": "local",
             "tell me a story about a dragon who lived on a mountain and guarded a library": "claude",
+            "remind me to sign Sky up at the vets": "claude",
+            "add to my diary that today was good": "claude",
+            "open my notebook": "local",
         }
         for text, want in cases.items():
             self.assertEqual(choose(text, "auto", True), want, text)
+
+    def test_short_answers_stay_with_the_brain_that_asked(self):
+        router = Router(object(), object(), "auto")
+        claude = router.claude
+        run(router.select("remind me to sign Sky up at the vets"))
+        self.assertIs(router.current, claude)
+        run(router.select("today at 6 o'clock", previous="What time should I remind you?"))
+        self.assertIs(router.current, claude)
+        run(router.select("today at 6 o'clock", previous="Done, it's set."))
+        self.assertIs(router.current, router.local)
+
+    def test_switching_brains_by_voice(self):
+        from unittest import mock
+        from cobrad import hands
+        from cobrad.hands import ToolError, brain
+        hands.load_all()
+        fake = NS(agent=NS(brain=Router(object(), object(), "auto")), info={})
+        async def hello():
+            pass
+        fake.announce_hello = hello
+        with mock.patch.object(brain, "server", fake), \
+                mock.patch("cobrad.settings.set_toml") as saved:
+            self.assertIn("thinking with Claude", run(hands.run("brain_mode", {"mode": "claude"})))
+            self.assertEqual(fake.agent.brain.mode, "claude")
+            saved.assert_called_once()
+            fake.agent.brain.claude = None
+            with self.assertRaises(ToolError):
+                run(hands.run("brain_mode", {"mode": "claude"}))
 
     def test_the_routing_phrase_is_removed(self):
         self.assertEqual(strip_choice("ask Claude: why do snakes flick their tongues"),

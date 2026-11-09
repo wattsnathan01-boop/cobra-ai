@@ -32,6 +32,9 @@ Item {
     property var point: null             // {monitor, x, y, w, h, note}: highlight a spot
     property bool hudOpen: false
     property bool settingsOpen: false
+    property bool notebookOpen: false
+    // notebook replies and changes, for the notebook window
+    signal notebookEvent(var ev)
     property string settingsPage: "brains"
     property var settings: null          // snapshot from the daemon
     property string settingsNote: ""     // "voice changed to …" / an error
@@ -147,6 +150,14 @@ Item {
             busyKey = ""
             settingsNote = ev.message
             settingsError = true
+            break
+        case "notebook": case "notebook_changed": case "recording": case "reminder":
+            notebookEvent(ev)
+            break
+        case "notebook_open":
+            notebookOpen = true
+            hudOpen = false
+            if (ev.id || ev.page) notebookEvent(ev)
             break
         case "open_settings":
             openSettings(ev.page)

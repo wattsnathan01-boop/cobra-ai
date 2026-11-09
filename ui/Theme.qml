@@ -8,6 +8,7 @@ QtObject {
     readonly property color mint: "#3bf0b6"
     readonly property color violet: "#8a7bff"
     readonly property color crimson: "#ff2d63"
+    readonly property color amber: "#ffb547"
     readonly property string mono: "JetBrainsMono Nerd Font"
 
     function accent(mode) {

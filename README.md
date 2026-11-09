@@ -156,6 +156,31 @@ Each app's tools appear as `<app>__<tool>` and go through the permission gate: t
 marks read-only run straight away, anything that changes things asks first (Settings →
 Permissions → Connected apps). If the app isn't open she says so, and reconnects when it is.
 
+## Notebook
+
+A notebook, diary and reminder app you share with Cobra and Claude. Open it with **SUPER+N**,
+`cobractl notebook` (or `cobractl notebook --page reminders`), or "Cobra, open my notebook".
+
+- **Notes and diary**: write straight into a note; photos, videos, voice memos and any file sit
+  inline (🖼 / 📎 in the bar at the bottom, 🎙 records a memo and Cobra writes out what you said).
+  Checklists, tags, pins, and a mood for each diary day. The Today page has a calendar of
+  diary days, what's due, recent media, and a log of what Cobra and Claude changed.
+- **Reminders**: "Cobra, remind me to take my meds at 8". When one is due she says it out
+  loud and a notification pops up; tick it off or snooze it from the banner.
+- **Who wrote what**: everything Cobra or Claude adds is labelled as theirs, and each change
+  can be undone from AI activity (only that change is taken back).
+- **Claude Code** reads and writes the same notebook through an MCP server, so you can say
+  "put this plan in my notebook" or "what did I note about the bike?" in any project:
+
+  ```sh
+  claude mcp add --scope user cobra-notebook -- ~/.local/share/cobra/venv/bin/cobra-notebook-mcp
+  ```
+
+It's all plain files in `~/notes/notebook` (change it under `[notebook]` in `config.toml`): one
+Markdown file per note in `notes/`, attachments in `media/`, `reminders.json`, and undo history
+and a trash folder in `.cobra/`. You can edit notes in any editor; the window picks changes up
+within a couple of seconds.
+
 ## Memory
 
 "Cobra, remember that I take my coffee black" saves it to `~/.config/cobra/memory.md` (a plain

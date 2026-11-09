@@ -83,16 +83,18 @@ and these with the other layer rules, to blur behind the pop-up and the HUD:
     hl.layer_rule({ name = "blur-cobra", match = { namespace = "cobra" }, blur = true, ignore_alpha = 0.2 })
     hl.layer_rule({ name = "blur-cobra-hud", match = { namespace = "cobra-hud" }, blur = true })
 
-and this with the window rules, so the settings window floats:
+and these with the window rules, so the settings and notebook windows float:
 
     hl.window_rule({ name = "cobra-settings", match = { title = "^(Cobra settings)$" }, float = true, size = "1400 880", center = true })
+    hl.window_rule({ name = "cobra-notebook", match = { title = "^(Cobra notebook)$" }, float = true, size = "1440 900", center = true })
 
-For push-to-talk (hold SUPER+C) and the full HUD (SUPER+SHIFT+C), add to the keybinds in
+For push-to-talk (hold SUPER+C), the full HUD (SUPER+SHIFT+C) and the notebook (SUPER+N), add to the keybinds in
 ~/.config/hypr/hyprland.lua:
 
     hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen start"))
     hl.bind(mod .. " + C", hl.dsp.exec_cmd("~/.local/bin/cobractl listen stop"), { release = true })
     hl.bind(mod .. " + SHIFT + C", hl.dsp.exec_cmd("~/.local/bin/cobractl hud"))
+    hl.bind(mod .. " + N", hl.dsp.exec_cmd("~/.local/bin/cobractl notebook"))
 
 For the eye badge (shown only while Cobra can see your screen), add "custom/cobra-eye" to
 waybar's modules-right and this module:
@@ -109,6 +111,8 @@ Then try:
     cobractl chat
     cobractl watch     (shows what she hears and says while you use SUPER+C)
     cobractl settings  (brains, voice, wake word, personality, permissions)
+    cobractl notebook  (notes, diary, reminders; for Claude Code too:
+      claude mcp add --scope user cobra-notebook -- ~/.local/share/cobra/venv/bin/cobra-notebook-mcp)
 
 Logs:         journalctl --user -u cobra -f
 Audit trail:  ~/.local/state/cobra/audit.jsonl

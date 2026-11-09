@@ -26,6 +26,18 @@ sudo_run     = "ask"
 packages_search  = "always"
 packages_install = "ask"
 files_delete = "never"
+notes_search  = "always"
+notes_read    = "always"
+notes_add     = "always"
+notes_append  = "always"
+diary_write   = "always"
+notes_attach  = "always"
+notes_delete  = "ask"
+reminder_set  = "always"
+reminders_list = "always"
+reminder_done = "always"
+notebook_open = "always"
+brain_mode    = "always"
 
 [files]
 # Folders the file tools may use (folders that don't exist are ignored). Even inside these,

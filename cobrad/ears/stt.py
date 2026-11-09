@@ -13,6 +13,11 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
+# strict mode: Whisper's own "that wasn't speech" score, and how unsure it was of the words
+NO_SPEECH_MAX = 0.5
+MIN_LOGPROB = -1.0
+
+
 def _preload_cuda12() -> None:
     """CTranslate2 (under faster-whisper) is built for CUDA 12, but Arch ships CUDA 13. The CUDA 12
     cuBLAS and cuDNN come from NVIDIA's pip wheels instead; load them up front so CTranslate2
@@ -62,14 +67,20 @@ class Transcriber:
                 error = e
         raise RuntimeError(f"couldn't start Whisper: {error}")
 
-    def transcribe(self, audio: np.ndarray, prompt: str | None = None, beam: int = 1) -> str:
+    def transcribe(self, audio: np.ndarray, prompt: str | None = None, beam: int = 1,
+                   strict: bool = False) -> str:
         """audio: mono float32 at 16 kHz. Returns "" if nobody spoke.
-        prompt: text Whisper treats as what came before, to make words like "Cobra" likelier."""
-        return self._run(audio, vad=True, prompt=prompt, beam=beam)
+        prompt: text Whisper treats as what came before, to make words like "Cobra" likelier.
+        strict: drop what Whisper isn't sure was speech (for the always-on mic, where music
+        and noise otherwise come out as made-up words, often the prompt repeated back)."""
+        return self._run(audio, vad=True, prompt=prompt, beam=beam, strict=strict)
 
-    def _run(self, audio: np.ndarray, vad: bool, prompt: str | None = None, beam: int = 1) -> str:
+    def _run(self, audio: np.ndarray, vad: bool, prompt: str | None = None, beam: int = 1,
+             strict: bool = False) -> str:
         with self._lock:
             segments, _ = self.model.transcribe(audio, language="en", beam_size=beam,
                                                 vad_filter=vad, condition_on_previous_text=False,
                                                 initial_prompt=prompt)
-            return " ".join(s.text.strip() for s in segments).strip()
+            return " ".join(s.text.strip() for s in segments
+                            if not strict or (s.no_speech_prob < NO_SPEECH_MAX
+                                              and s.avg_logprob > MIN_LOGPROB)).strip()

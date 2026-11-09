@@ -29,6 +29,7 @@ gpu = [
 [project.scripts]
 cobrad = "cobrad.main:run"
 cobractl = "cobrad.ctl:main"
+cobra-notebook-mcp = "cobrad.notebook.mcp_server:main"
 
 [tool.setuptools.packages.find]
 include = ["cobrad*"]

@@ -59,6 +59,11 @@ max_side = 1280
 # after a restart, carry on the last conversation if it was within this many hours
 resume_hours = 6
 
+[notebook]
+# notes, diary, reminders and attachments (plain Markdown files; Claude Code reaches it through
+# the cobra-notebook MCP server, see README)
+dir = "~/notes/notebook"
+
 [agent]
 max_steps = 8
 history_turns = 12

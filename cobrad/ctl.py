@@ -215,6 +215,9 @@ async def amain(args: argparse.Namespace) -> None:
             await _send(writer, {"type": "open_settings", "page": args.page or ""})
         elif args.cmd == "hud":
             await _send(writer, {"type": "hud", "action": args.action})
+        elif args.cmd == "notebook":
+            await _send(writer, {"type": "notebook_open", "id": args.id or "",
+                                 "page": args.page or ""})
         elif args.cmd == "hush":
             await _send(writer, {"type": "hush"})
         elif args.cmd == "watch":
@@ -284,6 +287,10 @@ def main(argv: list[str] | None = None) -> None:
                                                 "memory", "permissions", "shortcuts"])
     hud = sub.add_parser("hud", help="open or close the full HUD")
     hud.add_argument("action", nargs="?", default="toggle", choices=["toggle", "show", "hide"])
+    nbk = sub.add_parser("notebook", help="open the notebook window")
+    nbk.add_argument("id", nargs="?", help="a note to open")
+    nbk.add_argument("--page", choices=["today", "notes", "diary", "reminders", "media",
+                                        "activity"])
     sub.add_parser("watch", help="show what she hears and says, live")
     sub.add_parser("status", help="idle / listening / thinking / speaking")
     sub.add_parser("reset", help="forget the conversation so far")

@@ -136,6 +136,15 @@ async def amain() -> None:
         "\nWatching mode is on: the person has asked you to keep an eye on their screen. "
         "When a question could be about what they're looking at, use screen_look."
         if screen.watching else "")
+    from .hands import brain as brain_tools
+    brain_tools.server = server
+    from .hands import notebook as notebook_tools
+    from .notebook import Notebook
+    from .notebook.service import Service
+    server.notebook = Service(Notebook(Path(cfg["notebook"]["dir"])), server)
+    notebook_tools.open_window = lambda note_id="", page="": server._broadcast(
+        {"type": "notebook_open", "id": note_id, "page": page})
+    notebook_task = asyncio.create_task(server.notebook.run())
     await server.start()
     if server.voice:
         setup_wake(cfg, server)
@@ -146,6 +155,7 @@ async def amain() -> None:
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stop.set)
     await stop.wait()
+    notebook_task.cancel()
     if ears:
         ears.cancel()
     await mcp.stop_all()

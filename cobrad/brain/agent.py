@@ -71,7 +71,10 @@ class Agent:
     async def ask(self, text: str, emit: Emit, confirm: Confirm | None) -> str:
         if hasattr(self.brain, "select"):
             # Auto mode: local or Claude for this question ("ask Claude:" is removed)
-            text = await self.brain.select(text, emit) or text
+            previous = next((m.get("content") or "" for m in reversed(self.history)
+                             if m.get("role") == "assistant" and isinstance(m.get("content"), str)
+                             and m.get("content")), "")
+            text = await self.brain.select(text, emit, previous) or text
         turn = [{"role": "user", "content": text}]
         tools = hands.schemas()
         context = self._context()  # once per question, so every step sees the same

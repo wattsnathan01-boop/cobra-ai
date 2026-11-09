@@ -28,7 +28,8 @@ _HEAVY = re.compile(
     r"compile|regex|refactor|explain|why|how (do|does|can|would|should)|what('s| is) the "
     r"difference|compare|plan|write|draft|essay|email|letter|summar\w*|translate|file|files|"
     r"config|configure|folder|edit|fix|terminal|command|shell|research|recommend|ideas?|"
-    r"design|mock-?up|wireframe|layout|canvas|pencil|landing page|ui)\b",
+    r"design|mock-?up|wireframe|layout|canvas|pencil|landing page|ui|"
+    r"remind\w*|diary|jot|note (that|this|it|down))\b",
     re.IGNORECASE)
 _QUICK = re.compile(
     r"\b(volume|mute|unmute|louder|quieter|play|pause|resume|skip|next|previous|song|music|"
@@ -37,6 +38,8 @@ _QUICK = re.compile(
     r"remember|forget|hello|hi|hey|thanks|thank you|morning|night|how are you|screen|"
     r"watch|install|package)\b", re.IGNORECASE)
 LONG_QUESTION_WORDS = 14
+# a short answer to a question she just asked ("today at 6") stays with the brain that asked
+FOLLOW_UP_WORDS = 8
 # "ask Claude: …" / "use local, …" at the start is for the router, not the model
 _LEADING_CHOICE = re.compile(r"^\s*(?:(?:please|hey|ok|okay)\W+)?(?:(?:ask|use|with) "
                              r"(?:claude|the local( brain| model)?|local)|locally)\b(?:\s+to\b)?"
@@ -88,10 +91,17 @@ class Router:
         return self.current.model
 
     async def select(self, text: str,
-                     emit: Callable[[dict], Awaitable[None]] | None = None) -> str:
-        """Pick the brain for this question; returns the question as the model should see it."""
-        which = choose(text, self.mode, self.claude is not None)
-        self.current = self.claude if which == "claude" else self.local
+                     emit: Callable[[dict], Awaitable[None]] | None = None,
+                     previous: str = "") -> str:
+        """Pick the brain for this question; returns the question as the model should see it.
+        previous: her last reply. If it asked something and this is a short answer, the same
+        brain carries on (the other one wouldn't know what "today at 6" is about)."""
+        follow_up = (self.mode == "auto" and previous.rstrip().endswith("?")
+                     and len(text.split()) <= FOLLOW_UP_WORDS
+                     and not _ASK_CLAUDE.search(text) and not _USE_LOCAL.search(text))
+        if not follow_up:
+            which = choose(text, self.mode, self.claude is not None)
+            self.current = self.claude if which == "claude" else self.local
         if emit:
             await emit({"type": "brain", "name": self.current.name, "model": self.current.model})
         return strip_choice(text)

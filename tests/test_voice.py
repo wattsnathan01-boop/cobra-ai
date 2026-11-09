@@ -236,7 +236,7 @@ class FakeTranscriber:
     def __init__(self, *texts):
         self.texts = list(texts)
 
-    def transcribe(self, audio, prompt=None, beam=1):
+    def transcribe(self, audio, prompt=None, beam=1, strict=False):
         return self.texts.pop(0)
 
 
@@ -434,6 +434,14 @@ class VoiceBusTests(unittest.TestCase):
         agent = run(go())
         self.assertEqual([m["content"] for m in agent.history if m["role"] == "user"],
                          ["how hot is my GPU?", "pause the music"])
+
+    def test_prompt_echoes_are_ignored(self):
+        from cobrad.bus import is_prompt_echo
+        self.assertFalse(is_prompt_echo("Cobra, what's my GPU?"))  # a real question now
+        self.assertTrue(is_prompt_echo("Cobra, cobra, cobra."))
+        self.assertFalse(is_prompt_echo("Cobra."))
+        self.assertFalse(is_prompt_echo("Cobra, what's my GPU temperature right now?"))
+        self.assertFalse(is_prompt_echo("Cobra, remind me to call the vet"))
 
     def test_confirm_is_answered_by_voice(self):
         async def go():
