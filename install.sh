@@ -50,7 +50,7 @@ say "Downloading the voice and Whisper (~1.7 GB, one time)"
 
 say "Config (existing files are kept)"
 mkdir -p "$CONF"
-for f in config.toml permissions.toml persona.md; do
+for f in config.toml permissions.toml; do  # persona.md only once you edit it
     [ -e "$CONF/$f" ] || cp "$DIR/cobrad/defaults/$f" "$CONF/$f"
 done
 

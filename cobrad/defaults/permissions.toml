@@ -38,6 +38,8 @@ reminders_list = "always"
 reminder_done = "always"
 notebook_open = "always"
 brain_mode    = "always"
+skills_list   = "always"
+skill_read    = "always"
 
 [files]
 # Folders the file tools may use (folders that don't exist are ignored). Even inside these,

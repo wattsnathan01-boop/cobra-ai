@@ -66,6 +66,11 @@ resume_hours = 6
 # the cobra-notebook MCP server, see README)
 dir = "~/notes/notebook"
 
+[skills]
+# folders of skills (how-to guides, the same format as Claude Code's), read with skill_read;
+# ~/.claude/skills means anything installed for Claude Code works for Cobra too
+dirs = ["~/.config/cobra/skills", "~/.claude/skills"]
+
 [agent]
 max_steps = 8
 history_turns = 12

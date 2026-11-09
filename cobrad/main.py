@@ -97,6 +97,8 @@ async def amain() -> None:
     from . import screen
     from .hands import files
     files.configure(load_allowed_folders())
+    from .hands import skills
+    skills.configure(cfg["skills"]["dirs"])
     from .hands import mcp
     await mcp.start_all(config_dir() / "mcp.json")  # tools from other apps (Pencil, …)
     screen.SETTINGS.update(host=cfg["local"]["host"], model=cfg["local"]["vision_model"],

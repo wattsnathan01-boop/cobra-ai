@@ -33,7 +33,8 @@ _HEAVY = re.compile(
     r"remind\w*|diary|jot|note (that|this|it|down)|"
     r"search|look up|look it up|google|news|latest|weather|forecast|price|prices|cost|"
     r"web|website|online|internet|open(ing)? (hours|times)|score|results?|"
-    r"site|web ?page|tab|your browser|fill in|form|sign up|log ?in)\b",
+    r"site|web ?page|tab|your browser|fill in|form|sign up|log ?in|"
+    r"skills?|remotion|animat\w*|render\w*|(make|create|build) (me )?(a|an) (video|clip))\b",
     re.IGNORECASE)
 _QUICK = re.compile(
     r"\b(volume|mute|unmute|louder|quieter|play|pause|resume|skip|next|previous|song|music|"

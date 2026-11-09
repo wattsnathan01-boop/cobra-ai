@@ -261,13 +261,17 @@ async def apply(server, key: str, value) -> str:
         text = str(value).strip() + "\n"
         if len(text) < 20:
             raise SettingError("that's too short to be a personality")
-        (config_dir() / "persona.md").write_text(text, encoding="utf-8")
+        if text == (DEFAULTS / "persona.md").read_text(encoding="utf-8"):
+            # unchanged: keep following the default, so later improvements reach her
+            (config_dir() / "persona.md").unlink(missing_ok=True)
+        else:
+            (config_dir() / "persona.md").write_text(text, encoding="utf-8")
         server.agent.persona = text  # new instructions: Claude starts a fresh cache from here
         return "personality saved"
 
     if key == "persona.reset":
         text = (DEFAULTS / "persona.md").read_text(encoding="utf-8")
-        (config_dir() / "persona.md").write_text(text, encoding="utf-8")
+        (config_dir() / "persona.md").unlink(missing_ok=True)
         server.agent.persona = text
         return "personality reset to the default"
 
