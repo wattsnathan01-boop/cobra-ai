@@ -155,6 +155,7 @@ Item {
             notebookEvent(ev)
             break
         case "notebook_open":
+            notebookOpen = false   // if it thinks it's open but the window is gone, re-show it
             notebookOpen = true
             hudOpen = false
             if (ev.id || ev.page) notebookEvent(ev)
