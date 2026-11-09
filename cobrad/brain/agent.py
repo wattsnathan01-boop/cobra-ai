@@ -58,16 +58,25 @@ class Agent:
             self.memory.new_conversation()
 
     def _system(self) -> dict:
+        """Her standing instructions: the same on every request (so Claude can cache them)."""
+        return {"role": "system", "content": f"{self.persona}\n\n{ABILITIES_NOTE}"}
+
+    def _context(self) -> str:
+        """What changes per question: the time, what she remembers, watching mode."""
         now = time.strftime("%A %d %B %Y, %H:%M")
         extra = self.context() if self.context else ""
         remembered = self.memory.prompt() if self.memory else ""
-        return {"role": "system",
-                "content": f"{self.persona}\n\nCurrent local time: {now}.{extra}{remembered}"
-                           f"\n\n{ABILITIES_NOTE}"}
+        return f"Current local time: {now}.{extra}{remembered}".strip()
 
     async def ask(self, text: str, emit: Emit, confirm: Confirm | None) -> str:
+        if hasattr(self.brain, "select"):
+            # Auto mode: local or Claude for this question ("ask Claude:" is removed)
+            text = await self.brain.select(text, emit) or text
         turn = [{"role": "user", "content": text}]
         tools = hands.schemas()
+        context = self._context()  # once per question, so every step sees the same
+        # the honesty checks below are for the local model's habit of copying old replies
+        checks = getattr(self.brain, "name", "local") != "claude"
         reply = ""
         used_tools = False
         nudged_at: int | None = None  # where in `turn` an empty claim or refusal was caught
@@ -78,7 +87,8 @@ class Agent:
             reply, calls = "", []
             await emit({"type": "state", "state": "thinking"})
             try:
-                async for ev in self.brain.chat([self._system(), *history, *turn], tools):
+                async for ev in self.brain.chat([self._system(), *history, *turn], tools,
+                                                context):
                     if ev["type"] == "text":
                         if not reply:
                             await emit({"type": "state", "state": "speaking"})
@@ -91,7 +101,7 @@ class Agent:
                 return ""
 
             turn.append(self.brain.assistant_message(reply, calls))
-            if not calls and not used_tools and nudged_at is None:
+            if checks and not calls and not used_tools and nudged_at is None:
                 nudge = NUDGE if _CLAIM.search(reply) else \
                     REFUSAL_NUDGE if _REFUSAL.search(reply) else None
                 if nudge:
@@ -138,7 +148,7 @@ class Agent:
                 await emit({"type": "tool", "name": name, "args": args,
                             "status": "done" if ok else "failed", "result": result,
                             "ms": round((time.monotonic() - started) * 1000)})
-                turn.append(self.brain.tool_message(name, result))
+                turn.append(self.brain.tool_message(name, result, call.get("id")))
         else:
             await emit({"type": "error", "message": "stopped after too many tool steps"})
 
@@ -170,7 +180,9 @@ class Agent:
                                        text=as_text(dropped))
         text = ""
         try:
-            async for ev in self.brain.chat([{"role": "user", "content": prompt}], []):
+            # background work stays on the free local model, whichever brain is answering
+            brain = getattr(self.brain, "background", self.brain)
+            async for ev in brain.chat([{"role": "user", "content": prompt}], []):
                 if ev["type"] == "text":
                     text += ev["text"]
         except Exception:

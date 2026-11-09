@@ -259,7 +259,7 @@ class FakeSpeaker:
 class SlowBrain:
     """Never finishes thinking, so it can be interrupted."""
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, context=""):
         await asyncio.sleep(60)
         yield {"type": "text", "text": "too late"}
 

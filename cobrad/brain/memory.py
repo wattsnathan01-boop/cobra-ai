@@ -53,6 +53,8 @@ class Memory:
                 id INTEGER PRIMARY KEY, conversation INTEGER NOT NULL, ts REAL NOT NULL,
                 message TEXT NOT NULL);
             CREATE INDEX IF NOT EXISTS messages_by_conversation ON messages(conversation);
+            CREATE TABLE IF NOT EXISTS usage (
+                ts REAL NOT NULL, model TEXT NOT NULL, cost REAL NOT NULL);
         """)
         self.conversation = self._resume_or_start()
         _current = self
@@ -140,6 +142,16 @@ class Memory:
         self.db.execute("UPDATE conversations SET summary = ? WHERE id = ?",
                         (text.strip(), self.conversation))
         self.db.commit()
+
+    def record_usage(self, model: str, dollars: float) -> None:
+        self.db.execute("INSERT INTO usage (ts, model, cost) VALUES (?, ?, ?)",
+                        (time.time(), model, dollars))
+        self.db.commit()
+
+    def spend_this_month(self) -> float:
+        start = time.mktime(time.strptime(time.strftime("%Y-%m-01"), "%Y-%m-%d"))
+        return self.db.execute("SELECT COALESCE(SUM(cost), 0) FROM usage WHERE ts >= ?",
+                               (start,)).fetchone()[0]
 
     def stats(self) -> dict:
         count = lambda q, *a: self.db.execute(q, a).fetchone()[0]

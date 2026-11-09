@@ -13,7 +13,12 @@ Item {
     property string tool: ""            // tool being used right now
     property string confirmTool: ""     // waiting for yes/no on this tool
     property string error: ""
-    property string model: ""
+    property string model: ""            // the local model
+    property string brainMode: "local"   // local | claude | auto
+    property bool claudeReady: false     // an API key is set up
+    property string claudeModel: ""
+    property string answering: "local"   // which brain took the current question
+    property string answeringModel: ""
     property string voice: ""
     property string stt: ""
     property real micLevel: 0
@@ -83,6 +88,8 @@ Item {
         switch (ev.type) {
         case "hello":
             model = ev.model || ""; voice = ev.voice || ""; stt = ev.stt || ""
+            brainMode = ev.brain || "local"; claudeReady = !!ev.claude
+            claudeModel = ev.claude_model || ""
             wakeOn = !!ev.wake
             break
         case "state":
@@ -91,6 +98,9 @@ Item {
             }
             if (ev.state !== "thinking") tool = ""
             mode = ev.state
+            break
+        case "brain":
+            answering = ev.name; answeringModel = ev.model || ""
             break
         case "partial":
             transcript = ev.text

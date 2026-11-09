@@ -29,10 +29,13 @@ class OllamaBrain:
         except httpx.HTTPError:
             return False
 
-    async def chat(self, messages: list[dict], tools: list[dict]) -> AsyncIterator[dict]:
+    async def chat(self, messages: list[dict], tools: list[dict],
+                   context: str = "") -> AsyncIterator[dict]:
         """Yield {"type": "text", "text"} chunks, then one {"type": "tool_calls", "calls"}
-        if the model wants tools. Each call is {"name": str, "arguments": dict}."""
-        body = {"model": self.model, "messages": messages, "tools": tools, "stream": True,
+        if the model wants tools. Each call is {"name": str, "arguments": dict}.
+        context: what changes per question (time, remembered facts), added to the system prompt."""
+        body = {"model": self.model, "messages": self._clean(messages, context), "tools": tools,
+                "stream": True,
                 "think": self.think, "keep_alive": self.keep_alive}
         calls: list[dict] = []
         try:
@@ -61,6 +64,21 @@ class OllamaBrain:
             yield {"type": "tool_calls", "calls": calls}
 
     @staticmethod
+    def _clean(messages: list[dict], context: str) -> list[dict]:
+        """Just what Ollama understands (turns Claude answered carry extra fields)."""
+        out = []
+        for m in messages:
+            msg = {"role": m["role"], "content": m.get("content") or ""}
+            if m.get("tool_calls"):
+                msg["tool_calls"] = [{"function": c.get("function", c)} for c in m["tool_calls"]]
+            if m["role"] == "tool":
+                msg["tool_name"] = m.get("tool_name", "")
+            out.append(msg)
+        if context and out and out[0]["role"] == "system":
+            out[0]["content"] += "\n\n" + context
+        return out
+
+    @staticmethod
     def assistant_message(text: str, calls: list[dict]) -> dict:
         msg: dict = {"role": "assistant", "content": text}
         if calls:
@@ -69,5 +87,5 @@ class OllamaBrain:
         return msg
 
     @staticmethod
-    def tool_message(name: str, result: str) -> dict:
+    def tool_message(name: str, result: str, call_id: str | None = None) -> dict:
         return {"role": "tool", "tool_name": name, "content": result}

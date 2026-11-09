@@ -37,6 +37,8 @@ VOICES = [
     ("en_US-joe-medium", "male", "American"),
 ]
 VOICE_MB = {"low": 63, "medium": 63, "high": 114}
+CLAUDE_MODELS = {"claude-opus-5-5": "smartest", "claude-haiku-5-5": "fastest, cheapest"}
+EFFORTS = ("low", "medium", "high")
 PREVIEW_TEXT = "Hello. This is how I'd sound. Shall we get started?"
 
 
@@ -84,7 +86,7 @@ def set_toml(path: Path, section: str, key: str, value) -> None:
 # ── reading ───────────────────────────────────────────────────────────────
 
 async def _ollama(server) -> tuple[bool, list[dict]]:
-    brain = server.agent.brain
+    brain = getattr(server.agent.brain, "local", server.agent.brain)
     try:
         r = await brain.client.get("/api/tags")
         models = r.json().get("models", [])
@@ -136,17 +138,23 @@ def _tools(server) -> list[dict]:
 async def snapshot(server) -> dict:
     cfg = load_config()
     brain = server.agent.brain
+    local = getattr(brain, "local", brain)
+    claude = getattr(brain, "claude", None)
+    mem = server.agent.memory
     up, models = await _ollama(server)
     persona_file = config_dir() / "persona.md"
     default_persona = (DEFAULTS / "persona.md").read_text(encoding="utf-8")
     wake = server.wake
     return {
         "type": "settings",
-        "brain": {"mode": cfg["brain"]["mode"], "host": cfg["local"]["host"],
-                  "model": brain.model, "think": brain.think, "ollama_up": up,
+        "brain": {"mode": getattr(brain, "mode", "local"), "host": cfg["local"]["host"],
+                  "model": local.model, "think": local.think, "ollama_up": up,
                   "models": models, "vram": await _vram()},
-        "claude": {"configured": False, "model": cfg["claude"]["model"],
-                   "fast_model": cfg["claude"]["fast_model"]},
+        "claude": {"configured": claude is not None,
+                   "model": claude.model if claude else cfg["claude"]["model"],
+                   "models": list(CLAUDE_MODELS),
+                   "effort": claude.effort if claude else cfg["claude"]["effort"],
+                   "spend_month": round(mem.spend_this_month(), 4) if mem else 0.0},
         "voice": {"current": server.info.get("voice", ""),
                   "voices": _voices(server.info.get("voice", ""))},
         "wake": {"enabled": bool(wake and wake.running),
@@ -175,19 +183,46 @@ async def apply(server, key: str, value) -> str:
     """Save one setting and apply it now. Returns a short note for the window."""
     user_cfg = config_dir() / "config.toml"
 
+    if key == "brain.mode":
+        from .brain.router import MODES
+        if value not in MODES:
+            raise SettingError(f"mode must be one of {', '.join(MODES)}")
+        if value != "local" and getattr(server.agent.brain, "claude", None) is None:
+            raise SettingError("set up Claude first: it needs an API key (README → Claude)")
+        set_toml(user_cfg, "brain", "mode", value)
+        server.agent.brain.mode = value
+        server.info["brain"] = value
+        await server.announce_hello()
+        return {"local": "thinking locally", "claude": "thinking with Claude",
+                "auto": "picking local or Claude per question"}[value]
+
+    if key in ("claude.model", "claude.effort"):
+        claude = getattr(server.agent.brain, "claude", None)
+        field = key.split(".")[1]
+        allowed = CLAUDE_MODELS if field == "model" else EFFORTS
+        if value not in allowed:
+            raise SettingError(f"{field} must be one of {', '.join(allowed)}")
+        set_toml(user_cfg, "claude", field, value)
+        if claude:
+            setattr(claude, field, value)
+        if field == "model":
+            server.info["claude_model"] = value
+            await server.announce_hello()
+        return f"Claude {field}: {value}"
+
     if key == "local.model":
         up, models = await _ollama(server)
         if value not in {m["name"] for m in models}:
             raise SettingError(f"{value} isn't installed (ollama pull {value})")
         set_toml(user_cfg, "local", "model", value)
-        server.agent.brain.model = value
+        getattr(server.agent.brain, "local", server.agent.brain).model = value
         server.info["model"] = value
         await server.announce_hello()
         return f"now thinking with {value}"
 
     if key == "local.think":
         set_toml(user_cfg, "local", "think", bool(value))
-        server.agent.brain.think = bool(value)
+        getattr(server.agent.brain, "local", server.agent.brain).think = bool(value)
         return "thinking before answering " + ("on" if value else "off")
 
     if key == "voice.piper_voice":
@@ -227,7 +262,7 @@ async def apply(server, key: str, value) -> str:
         if len(text) < 20:
             raise SettingError("that's too short to be a personality")
         (config_dir() / "persona.md").write_text(text, encoding="utf-8")
-        server.agent.persona = text
+        server.agent.persona = text  # new instructions: Claude starts a fresh cache from here
         return "personality saved"
 
     if key == "persona.reset":

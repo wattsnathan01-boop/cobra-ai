@@ -1,8 +1,9 @@
 # Cobra config. Copy to ~/.config/cobra/config.toml to override.
 
 [brain]
-# local only for now; "claude" and "auto" arrive with the Claude brain
-mode = "local"
+# "local" (free, your GPU), "claude" (cloud, paid) or "auto" (picks per question).
+# Claude needs an API key: see README → Claude.
+mode = "auto"
 
 [local]
 host = "http://localhost:11434"
@@ -14,8 +15,11 @@ think = false
 keep_alive = "10m"
 
 [claude]
+# claude-opus-5-5 (smartest, $4/$20 per million tokens) or claude-haiku-5-5 (fast, $0.10/$0.50)
 model = "claude-opus-5-5"
 fast_model = "claude-haiku-5-5"
+# how hard she thinks: low (quick spoken replies), medium, high
+effort = "low"
 
 [voice]
 # Piper voice, female, British for now (no Australian Piper voice exists yet).

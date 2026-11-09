@@ -83,13 +83,23 @@ PanelWindow {
         property int icon
         property string title
         property string detail
-        property bool active
+        property string mode           // local | claude | auto
+        property bool available: true  // Claude and Auto need an API key
+        readonly property bool active: hud.cobra.brainMode === mode
         width: 172
         height: 44
         radius: 9
-        color: active ? Qt.alpha(hud.theme.mint, 0.12) : "transparent"
+        color: active ? Qt.alpha(hud.theme.mint, 0.12)
+             : brainMouse.containsMouse && available ? Qt.alpha(hud.theme.text, 0.05) : "transparent"
         border.color: active ? Qt.alpha(hud.theme.mint, 0.5) : "transparent"
-        opacity: active ? 1 : 0.45
+        opacity: active ? 1 : available ? 0.7 : 0.4
+        MouseArea {
+            id: brainMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: brain.available && !brain.active ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: if (brain.available && !brain.active) hud.cobra.set("brain.mode", brain.mode)
+        }
         Row {
             anchors { left: parent.left; leftMargin: 12; verticalCenter: parent.verticalCenter }
             spacing: 10
@@ -228,12 +238,22 @@ PanelWindow {
                 id: brains
                 anchors.centerIn: parent
                 spacing: 4
-                Brain { icon: 0xF015F; title: "Claude"; detail: "opus-5.5 · no key yet" }
                 Brain {
-                    icon: 0xF061A; title: "Local"; active: true
+                    icon: 0xF015F; title: "Claude"; mode: "claude"
+                    available: hud.cobra.claudeReady
+                    detail: hud.cobra.claudeReady
+                            ? hud.cobra.claudeModel.replace("claude-", "").replace("-5-5", "-5.5") + " · cloud"
+                            : "no key yet"
+                }
+                Brain {
+                    icon: 0xF061A; title: "Local"; mode: "local"
                     detail: hud.cobra.model + " · RTX 5060"
                 }
-                Brain { icon: 0xF062C; title: "Auto"; detail: "needs Claude" }
+                Brain {
+                    icon: 0xF062C; title: "Auto"; mode: "auto"
+                    available: hud.cobra.claudeReady
+                    detail: hud.cobra.claudeReady ? "route by task" : "needs Claude"
+                }
             }
         }
 
@@ -334,7 +354,8 @@ PanelWindow {
                 visible: hud.cobra.words > 1
                 text: "<font color='" + hud.accent + "'>—</font>  " + hud.mode
                       + " · first word " + latency.toFixed(1) + "s · "
-                      + Math.round(rate) + " tok/s · local"
+                      + Math.round(rate) + " tok/s · "
+                      + (hud.cobra.answering === "claude" ? "Claude" : "local")
                 textFormat: Text.StyledText
                 color: hud.theme.muted
                 font { family: hud.theme.mono; pixelSize: 11 }

@@ -8,3 +8,5 @@ ExecStart=%h/.local/share/cobra/venv/bin/cobrad
 Restart=on-failure
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1
+# the Claude API key, if stored (encrypted) in ~/.config/credstore.encrypted/anthropic
+ImportCredential=anthropic

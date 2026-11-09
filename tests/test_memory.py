@@ -91,7 +91,7 @@ class ConversationTests(unittest.TestCase):
         run(go())
         self.assertEqual([m["content"].strip() for m in agent.history], ["question two", "Reply two"])
         self.assertEqual(agent.memory.summary(), "They asked about one thing.")
-        system = agent._system()["content"]
+        system = agent._context()
         self.assertIn("Earlier in this conversation: They asked about one thing.", system)
 
 

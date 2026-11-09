@@ -107,6 +107,25 @@ offered for commands), **N** or Esc deny, or just say "yes" / "no". No answer in
 means no. Something set to **never** shows a "Blocked" card instead.
 Every tool call is logged to `~/.local/state/cobra/audit.jsonl`.
 
+## Claude
+
+Cobra thinks locally by default. To add Claude (Opus 5.5 or Haiku 5.5), you need an Anthropic
+API key; a claude.ai Pro/Max subscription doesn't include API access.
+
+1. At [platform.claude.com](https://platform.claude.com): **Settings → Billing** to add credit
+   (and a monthly limit if you like), then **Settings → API Keys → Create Key**.
+2. Run `cobractl claude-key` and paste the key when asked. It isn't shown, it's checked with
+   Anthropic, then stored **encrypted** as a systemd credential
+   (`~/.config/credstore.encrypted/anthropic`), never in a plain file or the repo, and Cobra
+   restarts. `cobractl claude-key --remove` forgets it.
+3. Pick a mode in the HUD or **Settings → Brains**: **Local**, **Claude**, or **Auto**, which
+   keeps quick things (media, volume, system info, windows, apps, memory, small talk) local and
+   sends coding, files, explanations, writing and longer questions to Claude. "Ask Claude" /
+   "use local" in a question always wins, and if Claude can't be reached she answers locally.
+
+Your screen is always read by the local vision model, even when Claude answers. Settings →
+Brains shows this month's spend.
+
 ## Screen
 
 "Cobra, what's this error?" or "what does the terminal on the left say?": she takes a

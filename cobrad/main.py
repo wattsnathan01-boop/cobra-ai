@@ -3,13 +3,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
+from pathlib import Path
 
 from . import hands
 from .brain.agent import Agent
 from .brain.memory import Memory
 from .brain.ollama import OllamaBrain
+from .brain.router import Router
 from .bus import Server
 from .config import (config_dir, data_dir, load_allowed_folders, load_config, load_permissions,
                      load_persona, socket_path, state_dir)
@@ -78,10 +81,17 @@ def fetch_models() -> None:
     download_model(cfg["ears"]["whisper_model"], cache_dir=str(_models_dir("whisper")))
 
 
+def claude_key() -> str | None:
+    """The Anthropic API key: an encrypted systemd credential (see README), or the
+    ANTHROPIC_API_KEY environment variable when running by hand."""
+    creds = os.environ.get("CREDENTIALS_DIRECTORY")
+    if creds and (Path(creds) / "anthropic").exists():
+        return (Path(creds) / "anthropic").read_text().strip() or None
+    return os.environ.get("ANTHROPIC_API_KEY") or None
+
+
 async def amain() -> None:
     cfg = load_config()
-    if cfg["brain"]["mode"] != "local":
-        log.warning("brain mode '%s' isn't built yet; using local", cfg["brain"]["mode"])
 
     hands.load_all()
     from . import screen
@@ -90,8 +100,8 @@ async def amain() -> None:
     screen.SETTINGS.update(host=cfg["local"]["host"], model=cfg["local"]["vision_model"],
                            hide=cfg["screen"]["hide"], max_side=cfg["screen"]["max_side"])
     local = cfg["local"]
-    brain = OllamaBrain(local["host"], local["model"], local["think"], local["keep_alive"])
-    if await brain.ping():
+    local_brain = OllamaBrain(local["host"], local["model"], local["think"], local["keep_alive"])
+    if await local_brain.ping():
         log.info("Ollama is up, using %s", local["model"])
     else:
         log.warning("can't reach Ollama at %s yet; will keep trying per request", local["host"])
@@ -100,12 +110,23 @@ async def amain() -> None:
                 user_file=config_dir() / "permissions.toml")
     memory = Memory(data_dir() / "cobra.db", config_dir() / "memory.md",
                     cfg["memory"]["resume_hours"])
+    claude = None
+    if key := claude_key():
+        from .brain.claude import ClaudeBrain
+        claude = ClaudeBrain(key, cfg["claude"]["model"], cfg["claude"]["effort"],
+                             on_usage=memory.record_usage)
+        log.info("Claude is set up (%s); brain mode %s", cfg["claude"]["model"],
+                 cfg["brain"]["mode"])
+    else:
+        log.info("no Claude API key; thinking locally")
+    brain = Router(local_brain, claude, cfg["brain"]["mode"])
     agent = Agent(brain, gate, load_persona(), cfg["agent"]["max_steps"],
                   cfg["agent"]["history_turns"], memory)
     if agent.history:
         log.info("carrying on the conversation (%d messages)", len(agent.history))
     server = Server(agent, socket_path(), info={
-        "brain": "local", "model": local["model"], "voice": cfg["voice"]["piper_voice"],
+        "brain": brain.mode, "model": local["model"], "claude": bool(claude),
+        "claude_model": cfg["claude"]["model"], "voice": cfg["voice"]["piper_voice"],
         "stt": cfg["ears"]["whisper_model"]}, follow_up_seconds=cfg["wake"]["follow_up_seconds"])
     server.voice = setup_voice(cfg, server)
     screen.notify = server.screen_event

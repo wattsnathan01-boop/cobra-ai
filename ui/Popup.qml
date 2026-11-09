@@ -42,7 +42,9 @@ PanelWindow {
             return cobra.confirmTool !== ""
                 ? "Allow " + cobra.confirmTool.replace(/_/g, " ") + "? "
                   + (cobra.wakeOn ? "Say yes or no" : "Hold SUPER+C, say yes or no")
-                : "Thinking · local · " + cobra.model
+                : "Thinking · " + (cobra.answering === "claude"
+                                   ? "Claude · " + cobra.answeringModel.replace("claude-", "")
+                                   : "local · " + cobra.model)
         if (mode === "speaking")
             return tail(cobra.reply.trim(), 72)
         if (watching)

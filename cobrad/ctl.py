@@ -227,6 +227,41 @@ async def amain(args: argparse.Namespace) -> None:
         writer.close()
 
 
+def claude_key(remove: bool = False) -> None:
+    """Store the Anthropic API key encrypted (systemd credential), never in a plain file."""
+    import getpass
+    import os
+    import subprocess
+    from pathlib import Path
+    store = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "credstore.encrypted"
+    target = store / "anthropic"
+    if remove:
+        target.unlink(missing_ok=True)
+        subprocess.run(["systemctl", "--user", "restart", "cobra"])
+        print(f"{MINT}Removed. Cobra restarted, thinking locally.{RESET}")
+        return
+    key = getpass.getpass(f"{VIOLET}Paste your Anthropic API key (it won't be shown), then Enter: {RESET}").strip()
+    if not key.startswith("sk-ant-"):
+        sys.exit(f"{CRIMSON}That doesn't look like an Anthropic API key (they start with sk-ant-).{RESET}")
+    try:
+        import anthropic
+        anthropic.Anthropic(api_key=key, max_retries=1, timeout=20).models.retrieve("claude-opus-5-5")
+        print(f"{MUTED}Anthropic accepted the key.{RESET}")
+    except anthropic.AuthenticationError:
+        sys.exit(f"{CRIMSON}Anthropic rejected that key. Nothing was saved.{RESET}")
+    except anthropic.APIConnectionError:
+        print(f"{MUTED}Couldn't reach Anthropic to check it (offline?); saving anyway.{RESET}")
+    except anthropic.APIStatusError as e:
+        print(f"{MUTED}Couldn't fully check it ({e.status_code}); saving anyway.{RESET}")
+    store.mkdir(mode=0o700, parents=True, exist_ok=True)
+    subprocess.run(["systemd-creds", "encrypt", "--user", "--name=anthropic", "-", str(target)],
+                   input=key.encode(), check=True)
+    target.chmod(0o600)
+    subprocess.run(["systemctl", "--user", "restart", "cobra"])
+    print(f"{MINT}Saved, encrypted, in {target}. Cobra restarted with Claude available.{RESET}")
+    print(f"{MUTED}Choose Auto or Claude in the HUD, or Settings → Brains.{RESET}")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="cobractl", description="Talk to Cobra.")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -242,6 +277,8 @@ def main(argv: list[str] | None = None) -> None:
     sc = sub.add_parser("screen", help="watching mode: Cobra keeps an eye on your screen")
     sc.add_argument("action", choices=["watch", "stop"])
     sub.add_parser("eye", help="waybar module: prints the screen indicator as JSON lines")
+    ck = sub.add_parser("claude-key", help="store your Anthropic API key (encrypted)")
+    ck.add_argument("--remove", action="store_true", help="forget the key")
     st = sub.add_parser("settings", help="open the settings window")
     st.add_argument("page", nargs="?", choices=["brains", "voice", "wake", "personality",
                                                 "memory", "permissions", "shortcuts"])
@@ -251,6 +288,9 @@ def main(argv: list[str] | None = None) -> None:
     sub.add_parser("status", help="idle / listening / thinking / speaking")
     sub.add_parser("reset", help="forget the conversation so far")
     args = p.parse_args(argv)
+    if args.cmd == "claude-key":
+        claude_key(args.remove)
+        return
     try:
         asyncio.run(eye() if args.cmd == "eye" else amain(args))
     except KeyboardInterrupt:

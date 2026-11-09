@@ -36,7 +36,7 @@ class FakeBrain:
         self.turns = list(turns)
         self.seen: list[list[dict]] = []
 
-    async def chat(self, messages, tools):
+    async def chat(self, messages, tools, context=""):
         self.seen.append(messages)
         text, calls = self.turns.pop(0)
         for word in text.split(" "):
